@@ -25,11 +25,15 @@ app = FastAPI()
 # -----------------------------------------------------------------
 # CORS設定
 # -----------------------------------------------------------------
-# Vercelからのアクセスを許可するため、一時的に全許可に設定しています。
-# 本番運用時は、セキュリティを高めるために特定のドメインのみ許可することをお勧めします。
+# 許可するオリジン（フロントエンドのURL）を設定
+origins = [
+    "http://localhost:3000",              # ローカル開発用
+    "https://toilet-app-tau.vercel.app",  # 本番環境用（末尾の / は無し！）
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 全てのオリジンを許可
+    allow_origins=origins,     # ← 具体的なリストを指定
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
