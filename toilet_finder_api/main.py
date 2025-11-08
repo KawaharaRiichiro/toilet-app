@@ -19,7 +19,6 @@ TABLE_NAME = 'toilets'
 SUMIDA_CSV_URL = "https://www.opendata.metro.tokyo.lg.jp/sumida/131075_public_toilet.csv"
 SHINJUKU_CSV_URL = "https://www.city.shinjuku.lg.jp/content/000399974.csv"
 SETAGAYA_EXCEL_URL = "https://www.city.setagaya.lg.jp/documents/4424/toilet2024.xlsx"
-# ★新規追加: 中野区
 NAKANO_CSV_URL = "https://www2.wagmap.jp/nakanodatamap/nakanodatamap/opendatafile/map_50/CSV/opendata_550070.csv"
 
 # -----------------------------------------------------------------
@@ -164,7 +163,6 @@ def get_setagaya_data():
         print(f"世田谷区データの取得に失敗しました: {e}")
         return []
 
-# ★★★ 新規追加: 中野区データ取得関数 ★★★
 def get_nakano_data():
     """ 中野区のデータをCSVから取得・加工 """
     print("中野区のデータを取得します...")
@@ -172,7 +170,6 @@ def get_nakano_data():
         response = requests.get(NAKANO_CSV_URL)
         response.raise_for_status()
 
-        # 文字コード判定 (CP932 または UTF-8 を想定)
         df = None
         for encoding in ['cp932', 'utf-8']:
             try:
@@ -190,13 +187,17 @@ def get_nakano_data():
         for _, row in df.iterrows():
             if pd.isna(row.get('緯度')) or pd.isna(row.get('経度')): continue
 
-            # 設備情報の判定ロジック ("あり" または "1" などをTrueとみなす)
             def is_available(val):
                 return str(val).strip() in ['あり', '1', '○', 'TRUE', 'True']
 
+            # ★修正: 住所に「東京都」を付与
+            address = row.get("住所")
+            if address and not str(address).startswith("東京都"):
+                address = f"東京都{address}"
+
             processed_data.append({
                 "name": row.get("名称"),
-                "address": row.get("住所"),
+                "address": address, # 修正した住所を使用
                 "latitude": float(row.get("緯度")),
                 "longitude": float(row.get("経度")),
                 "opening_hours": row.get("備考") if pd.notna(row.get("備考")) else None,
@@ -250,8 +251,8 @@ def main():
     all_toilet_data = []
     all_toilet_data.extend(get_sumida_data())
     all_toilet_data.extend(get_shinjuku_data())
-    all_toilet_data.extend(get_setagaya_data()) # メンテナンス明けに有効化
-    all_toilet_data.extend(get_nakano_data())   # ★中野区追加
+    all_toilet_data.extend(get_setagaya_data())
+    all_toilet_data.extend(get_nakano_data())
     all_toilet_data.extend(get_station_data_from_csv())
 
     print(f"\n合計 {len(all_toilet_data)} 件のデータを収集しました。")
