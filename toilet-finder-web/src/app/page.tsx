@@ -35,22 +35,22 @@ export default function Home() {
         </div>
       </header>
 
-      {/* コントロールパネル（タブ + 各機能 + フィルター） */}
-      <div className="flex flex-col z-10 shadow-md">
+{/* コントロールパネル */}
+      <div className="flex flex-col z-10 shadow-md bg-base-100"> {/* 背景色を明示 */}
         
-        {/* タブ切り替え */}
-        <div className="bg-base-200 p-2">
-          <div role="tablist" className="tabs tabs-boxed bg-white">
+        {/* タブ切り替え (tabs-lifted を使用) */}
+        <div className="pt-2 px-2 bg-base-200"> {/*少し上と左右に余白を追加*/}
+          <div role="tablist" className="tabs tabs-lifted">
             <a 
               role="tab" 
-              className={`tab ${activeTab === 'current' ? 'tab-active !bg-primary !text-white' : ''}`}
+              className={`tab ${activeTab === 'current' ? 'tab-active [--tab-bg:white]' : ''} font-bold`}
               onClick={() => setActiveTab('current')}
             >
               📍 現在地から
             </a>
             <a 
               role="tab" 
-              className={`tab ${activeTab === 'train' ? 'tab-active !bg-primary !text-white' : ''}`}
+              className={`tab ${activeTab === 'train' ? 'tab-active [--tab-bg:white]' : ''} font-bold`}
               onClick={() => setActiveTab('train')}
             >
               🚃 乗車中から
@@ -58,15 +58,15 @@ export default function Home() {
           </div>
         </div>
 
-        {/* タブの中身 */}
-        <div className="bg-white">
+        {/* タブの中身 (枠線を調整して一体感を出す) */}
+        <div className="bg-white border-base-300 border-b-2 p-3 rounded-b-box"> {/* rounded-b-box で下の角を丸く */}
           {activeTab === 'current' && (
-            <div className="p-3 bg-yellow-50 border-b border-yellow-100 animation-fade-in">
+            <div className="animation-fade-in">
               <NearestToilet />
             </div>
           )}
           {activeTab === 'train' && (
-             <div className="p-3 bg-blue-50 border-b border-blue-100 animation-fade-in">
+             <div className="animation-fade-in">
               <InTrainSearch />
             </div>
           )}

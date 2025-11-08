@@ -135,42 +135,43 @@ async def get_stations_by_line(line: str = Query(..., description="路線名")):
         print(f"Error fetching stations for line {line}: {e}")
         raise HTTPException(status_code=500, detail="駅名リストの取得に失敗しました")
 
-@app.get("/api/train-toilet", response_model=NearestToiletResponse)
+# 修正箇所のインポート部分（変更なし、確認用）
+# ...
+
+## toilet_finder_api/api.py の get_train_toilet 部分
+
+@app.get("/api/train-toilet", response_model=Toilet) # ← レスポンス型を Toilet (距離なし) に変更
 async def get_train_toilet(
     station: str = Query(..., description="駅名"),
     line: str = Query(..., description="路線名"),
     car: int = Query(..., description="号車番号")
 ):
-    """ 乗車位置から最寄りトイレを検索 """
+    """
+    指定された駅・路線・号車のドアに紐付けられた、最適なトイレを返す
+    """
     try:
-        # 正しいカラム名(door_latitude, door_longitude)を使用
+        # 1. ドアデータから nearest_toilet_id を取得
         door_response = supabase.table('station_platform_doors').select(
-            'door_latitude, door_longitude'
-        ).eq('station_name', station).eq('line_name', line).eq('car_number', car).execute()
+            'nearest_toilet_id'
+        ).eq('station_name', station).eq('line_name', line).eq('car_number', car).maybe_single().execute()
 
-        if not door_response.data or len(door_response.data) == 0:
-             print(f"Door not found for: {station}, {line}, Car {car}")
-             raise HTTPException(status_code=404, detail="指定された条件のドア位置情報が見つかりませんでした")
+        # データがない、または紐付けがない場合
+        if not door_response.data or not door_response.data.get('nearest_toilet_id'):
+             print(f"Toilet not linked for: {station}, {line}, Car {car}")
+             raise HTTPException(status_code=404, detail="この場所から最適なトイレの情報がまだ登録されていません")
         
-        door_location = door_response.data[0]
-        door_lat = door_location.get('door_latitude')
-        door_lon = door_location.get('door_longitude')
+        toilet_id = door_response.data['nearest_toilet_id']
 
-        if not door_lat or not door_lon:
-             raise HTTPException(status_code=500, detail="ドアの位置情報が不完全です")
+        # 2. トイレIDを使ってトイレ情報を取得
+        toilet_response = supabase.table('toilets').select("*").eq('id', toilet_id).maybe_single().execute()
 
-        response = supabase.rpc(
-            'find_nearest_toilet',
-            {'user_lat': door_lat, 'user_lon': door_lon}
-        ).execute()
+        if not toilet_response.data:
+            raise HTTPException(status_code=404, detail="指定されたトイレの情報が見つかりませんでした")
 
-        if response.data and len(response.data) > 0:
-            return response.data[0]
-        else:
-             raise HTTPException(status_code=404, detail="近くにトイレが見つかりませんでした")
+        return toilet_response.data
 
     except HTTPException as he:
         raise he
     except Exception as e:
         print(f"Error fetching train toilet: {e}")
-        raise HTTPException(status_code=500, detail=f"乗車中検索中にエラーが発生しました: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"検索中にエラーが発生しました: {str(e)}")

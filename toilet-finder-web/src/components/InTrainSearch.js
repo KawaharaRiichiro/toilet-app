@@ -2,43 +2,26 @@
 
 import { useState, useEffect } from 'react';
 
-// 距離を整形するヘルパー関数
-const formatDistance = (meters) => {
-  if (typeof meters !== 'number' || isNaN(meters)) return '';
-  if (meters < 1000) {
-    return `${Math.round(meters)}m`;
-  }
-  return `${(meters / 1000).toFixed(1)}km`;
-};
-
 export default function InTrainSearch() {
-  // フォーム入力の状態
-  const [line, setLine] = useState('');       // 路線を先に選択
-  const [station, setStation] = useState(''); // 次に駅を選択
+  const [station, setStation] = useState(''); 
+  const [line, setLine] = useState('');       
   const [car, setCar] = useState('5');
-  
-  // ドロップダウン用リストの状態
-  const [lineList, setLineList] = useState([]);
   const [stationList, setStationList] = useState([]);
-  
-  // APIの結果
+  const [lineList, setLineList] = useState([]);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isStationLoading, setIsStationLoading] = useState(false); // 駅リスト読み込み中フラグ
+  const [isStationLoading, setIsStationLoading] = useState(false);
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // 1. コンポーネント読み込み時に「全路線リスト」を取得
   useEffect(() => {
     const fetchLines = async () => {
       try {
-        // ★修正: 全路線を取得するエンドポイントへ変更
         const res = await fetch(`${API_BASE_URL}/api/lines`);
         if (!res.ok) throw new Error(`路線リスト取得エラー: ${res.status}`);
         const data = await res.json();
         setLineList(data);
-        // 初期値として最初の路線をセット
         if (data.length > 0) setLine(data[0]);
       } catch (err) {
         console.error("路線リストの取得に失敗", err);
@@ -48,7 +31,6 @@ export default function InTrainSearch() {
     fetchLines();
   }, []);
 
-  // 2. 路線が選択されたら「駅リスト」を取得
   useEffect(() => {
     if (!line) {
         setStationList([]);
@@ -59,12 +41,10 @@ export default function InTrainSearch() {
     const fetchStationsByLine = async () => {
       try {
         setIsStationLoading(true);
-        // ★修正: 路線名で駅を絞り込むエンドポイントへ変更
         const res = await fetch(`${API_BASE_URL}/api/stations-by-line?line=${encodeURIComponent(line)}`);
         if (!res.ok) throw new Error(`駅リスト取得エラー: ${res.status}`);
         const data = await res.json();
         setStationList(data);
-        // 駅が変更されたら、選択中の駅をリセットまたは先頭にセット
         if (data.length > 0) {
             setStation(data[0]);
         } else {
@@ -78,9 +58,8 @@ export default function InTrainSearch() {
       }
     };
     fetchStationsByLine();
-  }, [line]); // lineが変更されるたびに実行
+  }, [line]);
 
-  // 検索実行時の処理
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!line || !station) {
@@ -95,7 +74,7 @@ export default function InTrainSearch() {
       const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${encodeURIComponent(station)}&line=${encodeURIComponent(line)}&car=${car}`);
       if (!res.ok) {
         if (res.status === 404) {
-            throw new Error("指定された条件（路線・駅・号車）に一致するドア情報が見つかりませんでした。");
+            throw new Error("この場所から最適なトイレの情報がまだ登録されていません。");
         }
         throw new Error(`サーバーエラー: ${res.status}`);
       }
@@ -114,8 +93,6 @@ export default function InTrainSearch() {
       <h2 className="text-lg font-bold mb-3 text-gray-700">🚃 乗車中から検索</h2>
       
       <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-2">
-        
-        {/* ★UI変更: 路線名セレクトボックスを先に配置 */}
         <div className="form-control w-full max-w-[140px]">
           <label className="label-text">路線</label>
           <select 
@@ -129,7 +106,6 @@ export default function InTrainSearch() {
           </select>
         </div>
 
-        {/* ★UI変更: 駅名セレクトボックスをその後に配置 */}
         <div className="form-control w-full max-w-[140px]">
           <label className="label-text">駅</label>
           <select 
@@ -143,12 +119,11 @@ export default function InTrainSearch() {
             ) : stationList.length === 0 ? (
               <option>駅なし</option>
             ) : (
-              stationList.map(s => <option key={s} value={s}>{s}</option>
-            ))}
+              stationList.map(s => <option key={s} value={s}>{s}</option>)
+            )}
           </select>
         </div>
 
-        {/* 号車番号 */}
         <div className="form-control">
           <label className="label-text">号車</label>
           <input 
@@ -162,13 +137,11 @@ export default function InTrainSearch() {
           />
         </div>
 
-        {/* 検索ボタン */}
         <button type="submit" className="btn btn-primary btn-sm" disabled={isLoading || !line || !station}>
           {isLoading ? '検索中...' : '検索'}
         </button>
       </form>
 
-      {/* --- 結果表示エリア --- */}
       {error && (
         <div className="mt-3 text-red-600 text-sm font-bold">
           {error}
@@ -177,10 +150,10 @@ export default function InTrainSearch() {
 
       {result && (
         <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
-          <h3 className="font-bold text-blue-700 mb-1">🎯 ドアから一番近いトイレ</h3>
+          <h3 className="font-bold text-blue-700 mb-1">🎯 このドアから一番便利なトイレ</h3>
           <div className="text-base font-extrabold">
              {result.name}
-             <span className="ml-2 text-red-500">({formatDistance(result.distance_meters)})</span>
+             {/* 距離表示を削除しました */}
           </div>
           <p className="text-sm text-gray-600">{result.address}</p>
            <div className="mt-2 flex gap-2 text-xs flex-wrap">
@@ -195,12 +168,12 @@ export default function InTrainSearch() {
               </span>
            </div>
            
-            <a 
-              href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="btn btn-primary btn-sm w-full mt-3 text-white no-underline"
-            >
+           <a 
+            href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="btn btn-primary btn-sm w-full mt-3 text-white no-underline"
+          >
             Googleマップでルート案内 🏃‍♂️
           </a>
         </div>
