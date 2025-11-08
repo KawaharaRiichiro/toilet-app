@@ -4,9 +4,7 @@ import { useState, useEffect } from 'react';
 
 const formatDistance = (meters) => {
   if (typeof meters !== 'number' || isNaN(meters)) return '';
-  if (meters < 1000) {
-    return `${Math.round(meters)}m`;
-  }
+  if (meters < 1000) return `${Math.round(meters)}m`;
   return `${(meters / 1000).toFixed(1)}km`;
 };
 
@@ -25,26 +23,18 @@ export default function NearestToilet() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-
         try {
             const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const response = await fetch(
-              `${API_BASE_URL}/api/nearest?lat=${latitude}&lon=${longitude}`
-            );
+            const response = await fetch(`${API_BASE_URL}/api/nearest?lat=${latitude}&lon=${longitude}`);
           
           if (response.status === 404) {
              setError("この周辺にトイレが見つかりませんでした。");
              setNearestToilet(null);
              return;
           }
-
-          if (!response.ok) {
-            throw new Error(`APIエラー: ${response.status}`);
-          }
-          
+          if (!response.ok) throw new Error(`APIエラー: ${response.status}`);
           const data = await response.json();
           setNearestToilet(data);
-
         } catch (apiError) {
           console.error("API呼び出しエラー:", apiError);
           setError('サーバーからトイレ情報を取得できませんでした。');
@@ -60,10 +50,7 @@ export default function NearestToilet() {
           setError('現在地の取得に失敗しました。');
         }
       },
-      {
-        enableHighAccuracy: true, 
-        timeout: 5000,             
-      }
+      { enableHighAccuracy: true, timeout: 5000 }
     );
   }, []); 
 
@@ -124,7 +111,7 @@ export default function NearestToilet() {
              </p>
            ) : <div></div>}
            
-          {/* ★修正: Googleマップへのリンク (ラベルを確実に表示) */}
+          {/* ★修正: ルート案内ボタン (ラベル付き・公式URL) */}
           <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`}
             target="_blank" 
@@ -135,10 +122,8 @@ export default function NearestToilet() {
             <span className="font-bold">ルート案内</span>
           </a>
         </div>
-
       </div>
     );
   }
-
   return null; 
 }

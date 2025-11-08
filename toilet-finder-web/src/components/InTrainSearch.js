@@ -45,11 +45,7 @@ export default function InTrainSearch() {
         if (!res.ok) throw new Error(`駅リスト取得エラー: ${res.status}`);
         const data = await res.json();
         setStationList(data);
-        if (data.length > 0) {
-            setStation(data[0]);
-        } else {
-            setStation('');
-        }
+        if (data.length > 0) setStation(data[0]); else setStation('');
       } catch (err) {
         console.error("駅リストの取得に失敗", err);
         setError("駅リストのAPI取得に失敗しました");
@@ -73,9 +69,7 @@ export default function InTrainSearch() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${encodeURIComponent(station)}&line=${encodeURIComponent(line)}&car=${car}`);
       if (!res.ok) {
-        if (res.status === 404) {
-            throw new Error("この場所から最適なトイレの情報がまだ登録されていません。");
-        }
+        if (res.status === 404) throw new Error("この場所から最適なトイレの情報がまだ登録されていません。");
         throw new Error(`サーバーエラー: ${res.status}`);
       }
       const data = await res.json();
@@ -95,54 +89,26 @@ export default function InTrainSearch() {
       </h2>
       
       <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-3xl">
-        
         <div className="form-control w-full sm:w-48">
           <label className="label-text font-bold text-gray-600 mb-1 ml-1">路線</label>
-          <select 
-            className="select select-bordered w-full"
-            value={line}
-            onChange={(e) => setLine(e.target.value)}
-            disabled={lineList.length === 0}
-          >
+          <select className="select select-bordered w-full" value={line} onChange={(e) => setLine(e.target.value)} disabled={lineList.length === 0}>
             {lineList.length === 0 && <option>読み込み中...</option>}
             {lineList.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
-
         <div className="form-control w-full sm:w-48">
           <label className="label-text font-bold text-gray-600 mb-1 ml-1">駅</label>
-          <select 
-            className="select select-bordered w-full"
-            value={station}
-            onChange={(e) => setStation(e.target.value)}
-            disabled={isStationLoading || stationList.length === 0}
-          >
-            {isStationLoading ? (
-              <option>駅を読込中...</option>
-            ) : stationList.length === 0 ? (
-              <option>駅なし</option>
-            ) : (
-              stationList.map(s => <option key={s} value={s}>{s}</option>)
-            )}
+          <select className="select select-bordered w-full" value={station} onChange={(e) => setStation(e.target.value)} disabled={isStationLoading || stationList.length === 0}>
+            {isStationLoading ? <option>駅を読込中...</option> : stationList.length === 0 ? <option>駅なし</option> : stationList.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-
         <div className="form-control w-24">
           <label className="label-text font-bold text-gray-600 mb-1 ml-1">号車</label>
           <div className="join">
-            <input 
-              type="number" 
-              value={car}
-              min="1"
-              max="15"
-              onChange={(e) => setCar(e.target.value)}
-              className="input input-bordered join-item w-full text-center" 
-              required 
-            />
+            <input type="number" value={car} min="1" max="15" onChange={(e) => setCar(e.target.value)} className="input input-bordered join-item w-full text-center" required />
             <span className="btn btn-disabled join-item bg-base-200 border-base-300 text-gray-500 px-2">号車</span>
           </div>
         </div>
-
         <button type="submit" className="btn btn-primary px-8" disabled={isLoading || !line || !station}>
           {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
         </button>
@@ -150,8 +116,7 @@ export default function InTrainSearch() {
 
       {error && (
         <div className="mt-5 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-3">
-          <span className="text-xl">🚨</span>
-          <span>{error}</span>
+          <span className="text-xl">🚨</span><span>{error}</span>
         </div>
       )}
 
@@ -160,30 +125,18 @@ export default function InTrainSearch() {
           <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-lg">
             <span>🎯</span> このドアから一番便利なトイレ
           </h3>
-          <div className="text-xl font-extrabold text-gray-900 ml-1">
-             {result.name}
-          </div>
+          <div className="text-xl font-extrabold text-gray-900 ml-1">{result.name}</div>
           <p className="text-sm text-gray-600 mt-1 ml-1 flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
             {result.address}
           </p>
-           
            <div className="mt-4 flex gap-2 flex-wrap">
-              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white gap-1 pl-1.5" : "badge-ghost text-gray-400 gap-1 pl-1.5"}`}>
-                  {result.is_wheelchair_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                  車椅子
-              </span>
-              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white gap-1 pl-1.5" : "badge-ghost text-gray-400 gap-1 pl-1.5"}`}>
-                  {result.has_diaper_changing_station && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                  おむつ
-              </span>
-              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white gap-1 pl-1.5" : "badge-ghost text-gray-400 gap-1 pl-1.5"}`}>
-                  {result.is_ostomate_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                  オストメイト
-              </span>
+              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>♿ 車椅子</span>
+              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>👶 おむつ</span>
+              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>✚ オストメイト</span>
            </div>
            
-           {/* ★修正: Googleマップへのリンク (確実に表示) */}
+           {/* ★修正: ルート案内ボタン (ラベル付き・公式URL) */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
