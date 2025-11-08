@@ -33,10 +33,11 @@ export default function NearestToilet() {
         const { latitude, longitude } = position.coords;
 
         try {
-          // 3. FastAPIの最寄り検索APIを呼び出す
-          const response = await fetch(
-            `/api/nearest?lat=${latitude}&lon=${longitude}`
-          );
+            // 3. FastAPIの最寄り検索APIを呼び出す
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const response = await fetch(
+              `${API_BASE_URL}/api/nearest?lat=${latitude}&lon=${longitude}`
+            );
           
           if (response.status === 404) {
              setError("この周辺にトイレが見つかりませんでした。");
