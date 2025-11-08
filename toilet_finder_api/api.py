@@ -23,7 +23,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = FastAPI()
 origins = [
     "http://localhost:3000",
-    "https://toilet-app-tau.vercel.app/", # ← ここを最新の正しいURLにする
+    "https://toilet-app-tau.vercel.app", # ← ここを最新の正しいURLにする
 ]
 app.add_middleware(
     CORSMiddleware,

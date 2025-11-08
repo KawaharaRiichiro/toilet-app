@@ -55,7 +55,8 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
 
       try {
         // Next.jsのプロキシ経由でFastAPI(/api/toilets)を呼び出す
-        const res = await fetch(`/api/toilets?${params.toString()}`);
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const res = await fetch(`${API_BASE_URL}/api/toilets?${params.toString()}`);
         if (!res.ok) {
           throw new Error("Failed to fetch toilets");
         }
