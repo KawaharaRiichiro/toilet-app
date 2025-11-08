@@ -10,12 +10,12 @@ type Toilet = {
   address: string;
   latitude: number;
   longitude: number;
-  opening_hours: string | null;         // 追加: 営業時間
-  availability_notes: string | null;    // 追加: 利用可能時間などのメモ
+  opening_hours: string | null;
+  availability_notes: string | null;
   is_wheelchair_accessible: boolean;
   has_diaper_changing_station: boolean;
   is_ostomate_accessible: boolean;
-  inside_gate: boolean;
+  inside_gate: boolean | null; // nullも許容するように変更
 };
 
 // フィルターの型定義
@@ -31,7 +31,7 @@ type ToiletMapProps = {
 // 地図コンポーネント本体
 export default function ToiletMap({ filters }: ToiletMapProps) {
   const [toilets, setToilets] = useState<Toilet[]>([]);
-  const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null); // ★追加: 選択されたトイレ
+  const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
 
   // Google Maps APIの読み込み
   const { isLoaded } = useJsApiLoader({
@@ -74,7 +74,6 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
   };
 
   // 初期表示の中心座標（例: 上野駅周辺）
-  // ※ 実際のアプリでは、ユーザーの現在地を初期値にするのがベターです
   const center = {
     lat: 35.7138,
     lng: 139.777,
@@ -89,56 +88,66 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
     <GoogleMap
       mapContainerStyle={containerStyle}
       center={center}
-      zoom={15} // 少しズームアップ
+      zoom={15}
       options={{
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
-        clickableIcons: false, // 地図上の他のアイコンをクリック不可に
+        clickableIcons: false,
       }}
-      onClick={onMapClick} // 地図クリックで選択解除
+      onClick={onMapClick}
     >
       {/* トイレのピンを表示 */}
       {toilets.map((toilet) => (
         <MarkerF
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
-          onClick={() => setSelectedToilet(toilet)} // ★追加: クリックで選択
-          // フィルタ条件に応じてピンの色を変えるなどの工夫も可能
-          // icon={{ url: "..." }} 
+          onClick={() => setSelectedToilet(toilet)}
         />
       ))}
 
-      {/* ★追加: 選択されたトイレがある場合のみ吹き出しを表示 */}
+      {/* 選択されたトイレがある場合のみ吹き出しを表示 */}
       {selectedToilet && (
         <InfoWindowF
           position={{ lat: selectedToilet.latitude, lng: selectedToilet.longitude }}
-          onCloseClick={() => setSelectedToilet(null)} // ✕ボタンで閉じる
-          options={{ pixelOffset: new google.maps.Size(0, -30) }} // ピンの上に表示
+          onCloseClick={() => setSelectedToilet(null)}
+          options={{ pixelOffset: new google.maps.Size(0, -30) }}
         >
-          {/* 吹き出しの中身（HTML/Tailwind CSSで自由にデザイン可能） */}
-          <div className="p-2 max-w-xs">
-            <h3 className="font-bold text-lg text-blue-700 mb-1">{selectedToilet.name}</h3>
+          {/* 吹き出しの中身 */}
+          <div className="p-1 min-w-[200px] text-gray-800">
+            <h3 className="font-bold text-base text-blue-700 mb-2">{selectedToilet.name}</h3>
             
-            {/* 営業時間などがあれば表示 */}
+            {/* 営業時間 */}
             {selectedToilet.opening_hours && (
-               <p className="text-sm text-gray-600 mb-2">🕘 {selectedToilet.opening_hours}</p>
+               <p className="text-xs text-gray-600 mb-2">🕘 {selectedToilet.opening_hours}</p>
             )}
 
-            {/* 設備バッジ */}
-            <div className="flex flex-wrap gap-1 mb-2">
-              {selectedToilet.inside_gate && (
-                <span className="badge badge-sm badge-neutral text-white">改札内</span>
-              )}
-              {selectedToilet.is_wheelchair_accessible && (
-                <span className="badge badge-sm badge-success text-white">車椅子OK</span>
-              )}
-               {selectedToilet.has_diaper_changing_station && (
-                <span className="badge badge-sm badge-info text-white">おむつ台</span>
-              )}
-               {selectedToilet.is_ostomate_accessible && (
-                <span className="badge badge-sm badge-warning text-white">オストメイト</span>
-              )}
+            {/* 設備情報リスト */}
+            <div className="flex flex-col gap-1 text-sm bg-gray-50 p-2 rounded border">
+               {/* 改札内/外 */}
+               {selectedToilet.inside_gate !== null && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🚇</span>
+                    <span className="font-semibold badge badge-neutral badge-sm text-white">
+                      {selectedToilet.inside_gate ? '改札内' : '改札外'}
+                    </span>
+                  </div>
+               )}
+               {/* 車椅子 */}
+               <div className={`flex items-center gap-2 ${selectedToilet.is_wheelchair_accessible ? "text-green-700 font-medium" : "text-gray-400"}`}>
+                 <span className="text-lg">♿</span>
+                 <span>車椅子: {selectedToilet.is_wheelchair_accessible ? '〇' : '×'}</span>
+               </div>
+               {/* おむつ交換台 */}
+               <div className={`flex items-center gap-2 ${selectedToilet.has_diaper_changing_station ? "text-green-700 font-medium" : "text-gray-400"}`}>
+                 <span className="text-lg">👶</span>
+                 <span>おむつ台: {selectedToilet.has_diaper_changing_station ? '〇' : '×'}</span>
+               </div>
+               {/* オストメイト */}
+               <div className={`flex items-center gap-2 ${selectedToilet.is_ostomate_accessible ? "text-green-700 font-medium" : "text-gray-400"}`}>
+                 <span className="text-lg">✚</span>
+                 <span>オストメイト: {selectedToilet.is_ostomate_accessible ? '〇' : '×'}</span>
+               </div>
             </div>
 
             {/* Googleマップへのリンク */}
@@ -146,7 +155,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
                href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
-               className="btn btn-primary btn-xs w-full mt-2"
+               className="btn btn-primary btn-sm w-full mt-3 text-white no-underline"
             >
               ここへ行く 🏃‍♂️
             </a>
@@ -155,9 +164,8 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
       )}
     </GoogleMap>
   ) : (
-    // ロード中の表示
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <p className="text-gray-500">地図を読み込み中...</p>
+      <p className="text-gray-500 animate-pulse">地図を読み込み中...</p>
     </div>
   );
 }
