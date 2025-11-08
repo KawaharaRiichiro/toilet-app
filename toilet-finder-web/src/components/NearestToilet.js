@@ -6,10 +6,8 @@ import { useState, useEffect } from 'react';
 const formatDistance = (meters) => {
   if (typeof meters !== 'number' || isNaN(meters)) return '';
   if (meters < 1000) {
-    // 1000m未満はメートルで表示
     return `${Math.round(meters)}m`;
   }
-  // 1km以上はkm表示（小数点第1位まで）
   return `${(meters / 1000).toFixed(1)}km`;
 };
 
@@ -19,22 +17,18 @@ export default function NearestToilet() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 1. 位置情報サービスが利用可能かチェック
     if (!navigator.geolocation) {
       setError('お使いの端末は位置情報取得に対応していません。');
       setIsLoading(false);
       return;
     }
 
-    // 2. 現在地の取得を開始
     navigator.geolocation.getCurrentPosition(
-      // 成功時のコールバック
       async (position) => {
         const { latitude, longitude } = position.coords;
-        console.log("検知された現在地:", latitude, longitude); // ← これを追加
+        console.log("検知された現在地:", latitude, longitude);
 
         try {
-            // 3. FastAPIの最寄り検索APIを呼び出す
             const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const response = await fetch(
               `${API_BASE_URL}/api/nearest?lat=${latitude}&lon=${longitude}`
@@ -60,7 +54,6 @@ export default function NearestToilet() {
           setIsLoading(false);
         }
       },
-      // 失敗時のコールバック
       (geoError) => {
         setIsLoading(false);
         if (geoError.code === geoError.PERMISSION_DENIED) {
@@ -69,7 +62,6 @@ export default function NearestToilet() {
           setError('現在地の取得に失敗しました。');
         }
       },
-      // オプション設定
       {
         enableHighAccuracy: true, 
         timeout: 5000,             
@@ -77,9 +69,6 @@ export default function NearestToilet() {
     );
   }, []); 
 
-  // -----------------------------------------------------------------
-  // 画面表示
-  // -----------------------------------------------------------------
   if (isLoading) {
     return (
       <div className="p-4 text-center">
@@ -112,9 +101,7 @@ export default function NearestToilet() {
           <p className="text-gray-600">{nearestToilet.address}</p>
         </div>
         
-        {/* ★★★ 修正箇所: grid-cols-2 -> grid-cols-3 ★★★ */}
         <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-          {/* アクセシビリティ情報を表示 */}
           <p className={nearestToilet.is_wheelchair_accessible ? "text-green-600" : "text-gray-400"}>
             車椅子: {nearestToilet.is_wheelchair_accessible ? '✅ 対応' : '❌ 非対応'}
           </p>
@@ -126,18 +113,18 @@ export default function NearestToilet() {
           </p>
         </div>
         
-        {/* 時間とナビゲーション（別の行に表示） */}
-        <div className="mt-4 flex justify-between items-center">
+        <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-gray-700 text-sm">
             {nearestToilet.opening_hours && `時間: ${nearestToilet.opening_hours}`}
           </p>
+          {/* Googleマップへのリンク (修正済み) */}
           <a 
-            href={`http://googleusercontent.com/maps/google.com/1{nearestToilet.latitude},${nearestToilet.longitude}`} 
+            href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`} 
             target="_blank" 
             rel="noopener noreferrer" 
-            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-200"
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-200 w-full sm:w-auto text-center"
           >
-            Googleマップでルート案内 
+            Googleマップでルート案内 🏃‍♂️
           </a>
         </div>
 

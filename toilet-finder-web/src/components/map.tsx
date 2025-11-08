@@ -15,7 +15,7 @@ type Toilet = {
   is_wheelchair_accessible: boolean;
   has_diaper_changing_station: boolean;
   is_ostomate_accessible: boolean;
-  inside_gate: boolean | null; // nullも許容するように変更
+  inside_gate: boolean | null;
 };
 
 // フィルターの型定義
@@ -150,7 +150,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
                </div>
             </div>
 
-            {/* Googleマップへのリンク */}
+            {/* Googleマップへのリンク (修正済み) */}
             <a
                href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
