@@ -12,69 +12,90 @@ const formatDistance = (meters) => {
 };
 
 export default function InTrainSearch() {
-  const [station, setStation] = useState(''); 
-  const [line, setLine] = useState('');       
+  // フォーム入力の状態
+  const [line, setLine] = useState('');       // 路線を先に選択
+  const [station, setStation] = useState(''); // 次に駅を選択
   const [car, setCar] = useState('5');
-  const [stationList, setStationList] = useState([]);
+  
+  // ドロップダウン用リストの状態
   const [lineList, setLineList] = useState([]);
+  const [stationList, setStationList] = useState([]);
+  
+  // APIの結果
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLineLoading, setIsLineLoading] = useState(false);
+  const [isStationLoading, setIsStationLoading] = useState(false); // 駅リスト読み込み中フラグ
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+  // 1. コンポーネント読み込み時に「全路線リスト」を取得
   useEffect(() => {
-    const fetchStations = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/stations`);
-        if (!res.ok) throw new Error(`駅リスト取得エラー: ${res.status}`);
-        const data = await res.json();
-        setStationList(data);
-        if (data.length > 0) setStation(data[0]);
-      } catch (err) {
-        console.error("駅リストの取得に失敗", err);
-        setError("駅リストのAPI取得に失敗しました");
-      }
-    };
-    fetchStations();
-  }, []);
-
-  useEffect(() => {
-    if (!station) return;
     const fetchLines = async () => {
       try {
-        setIsLineLoading(true);
-        const res = await fetch(`${API_BASE_URL}/api/lines?station=${station}`);
+        // ★修正: 全路線を取得するエンドポイントへ変更
+        const res = await fetch(`${API_BASE_URL}/api/lines`);
         if (!res.ok) throw new Error(`路線リスト取得エラー: ${res.status}`);
         const data = await res.json();
         setLineList(data);
-        if (data.length > 0) {
-            setLine(data[0]);
-        } else {
-            setLine('');
-        }
+        // 初期値として最初の路線をセット
+        if (data.length > 0) setLine(data[0]);
       } catch (err) {
         console.error("路線リストの取得に失敗", err);
         setError("路線リストのAPI取得に失敗しました");
-      } finally {
-        setIsLineLoading(false);
       }
     };
     fetchLines();
-  }, [station]);
+  }, []);
 
+  // 2. 路線が選択されたら「駅リスト」を取得
+  useEffect(() => {
+    if (!line) {
+        setStationList([]);
+        setStation('');
+        return;
+    }
+
+    const fetchStationsByLine = async () => {
+      try {
+        setIsStationLoading(true);
+        // ★修正: 路線名で駅を絞り込むエンドポイントへ変更
+        const res = await fetch(`${API_BASE_URL}/api/stations-by-line?line=${encodeURIComponent(line)}`);
+        if (!res.ok) throw new Error(`駅リスト取得エラー: ${res.status}`);
+        const data = await res.json();
+        setStationList(data);
+        // 駅が変更されたら、選択中の駅をリセットまたは先頭にセット
+        if (data.length > 0) {
+            setStation(data[0]);
+        } else {
+            setStation('');
+        }
+      } catch (err) {
+        console.error("駅リストの取得に失敗", err);
+        setError("駅リストのAPI取得に失敗しました");
+      } finally {
+        setIsStationLoading(false);
+      }
+    };
+    fetchStationsByLine();
+  }, [line]); // lineが変更されるたびに実行
+
+  // 検索実行時の処理
   const handleSearch = async (e) => {
     e.preventDefault();
+    if (!line || !station) {
+        setError("路線と駅を選択してください。");
+        return;
+    }
     setIsLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${station}&line=${line}&car=${car}`);
+      const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${encodeURIComponent(station)}&line=${encodeURIComponent(line)}&car=${car}`);
       if (!res.ok) {
         if (res.status === 404) {
-            throw new Error("指定された条件（駅・路線・号車）に一致するドア情報が見つかりませんでした。");
+            throw new Error("指定された条件（路線・駅・号車）に一致するドア情報が見つかりませんでした。");
         }
         throw new Error(`サーバーエラー: ${res.status}`);
       }
@@ -93,34 +114,41 @@ export default function InTrainSearch() {
       <h2 className="text-lg font-bold mb-3 text-gray-700">🚃 乗車中から検索</h2>
       
       <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-2">
-        <div className="form-control w-full max-w-[120px]">
-          <label className="label-text">駅</label>
-          <select 
-            className="select select-bordered select-sm"
-            value={station}
-            onChange={(e) => setStation(e.target.value)}
-            disabled={stationList.length === 0}
-          >
-            {stationList.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-
-        <div className="form-control w-full max-w-[120px]">
+        
+        {/* ★UI変更: 路線名セレクトボックスを先に配置 */}
+        <div className="form-control w-full max-w-[140px]">
           <label className="label-text">路線</label>
           <select 
             className="select select-bordered select-sm"
             value={line}
             onChange={(e) => setLine(e.target.value)}
-            disabled={isLineLoading || lineList.length === 0}
+            disabled={lineList.length === 0}
           >
-            {isLineLoading ? (
-              <option>読み込み中...</option>
-            ) : (
-              lineList.map(l => <option key={l} value={l}>{l}</option>)
-            )}
+            {lineList.length === 0 && <option>読み込み中...</option>}
+            {lineList.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
 
+        {/* ★UI変更: 駅名セレクトボックスをその後に配置 */}
+        <div className="form-control w-full max-w-[140px]">
+          <label className="label-text">駅</label>
+          <select 
+            className="select select-bordered select-sm"
+            value={station}
+            onChange={(e) => setStation(e.target.value)}
+            disabled={isStationLoading || stationList.length === 0}
+          >
+            {isStationLoading ? (
+              <option>駅を読込中...</option>
+            ) : stationList.length === 0 ? (
+              <option>駅なし</option>
+            ) : (
+              stationList.map(s => <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 号車番号 */}
         <div className="form-control">
           <label className="label-text">号車</label>
           <input 
@@ -134,11 +162,13 @@ export default function InTrainSearch() {
           />
         </div>
 
-        <button type="submit" className="btn btn-primary btn-sm" disabled={isLoading}>
+        {/* 検索ボタン */}
+        <button type="submit" className="btn btn-primary btn-sm" disabled={isLoading || !line || !station}>
           {isLoading ? '検索中...' : '検索'}
         </button>
       </form>
 
+      {/* --- 結果表示エリア --- */}
       {error && (
         <div className="mt-3 text-red-600 text-sm font-bold">
           {error}
@@ -165,7 +195,6 @@ export default function InTrainSearch() {
               </span>
            </div>
            
-           {/* ★新規追加: Googleマップでルート案内ボタン */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
