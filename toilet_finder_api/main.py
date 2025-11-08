@@ -27,11 +27,11 @@ def get_sumida_data():
     """ 墨田区のデータをCSVから取得・加工 """
     print("墨田区のデータを取得します(CSV)...")
     try:
-        # 墨田区はUTF-8またはcp932を想定
+        # 墨田区はUTF-8またはCP932を想定
         try:
             df = pd.read_csv(SUMIDA_CSV_URL, encoding="utf-8")
         except UnicodeDecodeError:
-            df = pd.read_csv(SUMIDA_CSV_URL, encoding="cp932", errors='replace')
+            df = pd.read_csv(SUMIDA_CSV_URL, encoding="cp932", errors="replace")
 
         processed_data = []
         for _, row in df.iterrows():
@@ -45,7 +45,7 @@ def get_sumida_data():
                 "longitude": float(row.get("経度")),
                 "opening_hours": None, 
                 "availability_notes": None,
-                "is_wheelchair_accessible": False, 
+                "is_wheelchair_accessible": False,
                 "has_diaper_changing_station": False,
                 "is_ostomate_accessible": False,
                 "is_station_toilet": False,
@@ -66,28 +66,31 @@ def get_shinjuku_data():
         response = requests.get(SHINJUKU_CSV_URL)
         response.raise_for_status()
         
-        # ★修正: UTF-16 でデコードを試みる
+        # 複数の文字コードを試して読み込む
+        df = None
+        # 1. UTF-16 (カンマ区切り) を試す
         try:
-            # 'utf-16' は BOM の有無を自動判定してくれます
-            df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16', sep='\t') 
-            # ※ UTF-16のCSVはタブ区切り(TSV)になっていることも多いため、sep='\t' も試す価値あり。
-            # もしカンマ区切りなら sep=',' (デフォルト) に戻してください。
-            # 一旦、標準的なカンマ区切りと仮定して sep 指定なしで試してみます↓
-            # df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16')
-            
-            # もし上記で「1列しか認識されない」などの場合は、区切り文字が違う可能性があります。
-            # エラーが出る場合は、以下のいずれかを試してみてください:
-            # df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16', sep='\t')
-             
+            df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16', sep=',')
         except Exception:
-             # UTF-16で失敗した場合の予備（念のため）
-             df = pd.read_csv(io.BytesIO(response.content), encoding='cp932', errors='replace')
+            pass
+            
+        # 2. ダメなら CP932 (Shift-JIS) を試す
+        if df is None or '緯度' not in df.columns:
+             try:
+                df = pd.read_csv(io.BytesIO(response.content), encoding='cp932', sep=',', errors='replace')
+             except Exception:
+                 pass
 
-        # もしカンマ区切りで正しく読めていれば、カラム名が認識されているはず
-        if '緯度' not in df.columns:
-             # カンマじゃなかった可能性が高いので、タブ区切りで再トライ
-             print("  (カンマ区切りで失敗したため、タブ区切りで再試行します...)")
-             df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16', sep='\t')
+        # 3. それでもダメなら UTF-8 を試す
+        if df is None or '緯度' not in df.columns:
+             try:
+                df = pd.read_csv(io.BytesIO(response.content), encoding='utf-8', sep=',', errors='replace')
+             except Exception:
+                 pass
+
+        if df is None or '緯度' not in df.columns:
+             print("エラー: 新宿区のCSVを正しい文字コードで読み込めませんでした。")
+             return []
 
         processed_data = []
         for _, row in df.iterrows():
@@ -116,14 +119,13 @@ def get_shinjuku_data():
         return []
 
 # =================================================================
-# ★ 新規追加用テンプレート関数 (変更なし) ★
+# ★ 新規追加用テンプレート関数 ★
 # =================================================================
 def get_new_ward_data_template():
-    # ... (省略) ...
     return []
 
 # -----------------------------------------------------------------
-# 3. Supabase更新関数 (変更なし)
+# 3. Supabase更新関数
 # -----------------------------------------------------------------
 def update_supabase(data_list):
     """ 収集したデータをSupabaseにInsertする """
@@ -134,15 +136,19 @@ def update_supabase(data_list):
     try:
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         print(f"Supabaseに {len(data_list)} 件のデータを Insert (挿入) します...")
+        
         CHUNK_SIZE = 500 
         for i in range(0, len(data_list), CHUNK_SIZE):
             chunk = data_list[i:i + CHUNK_SIZE]
+            # 単純なinsertを使用 (エラー回避優先)
             supabase.table(TABLE_NAME).insert(chunk).execute()
             print(f"  ... {min(i + CHUNK_SIZE, len(data_list))} / {len(data_list)} 件 処理完了")
+
         print("\nデータの同期が正常に完了しました！")
     except Exception as e:
         print(f"\nエラー(Supabase): データベースの更新に失敗しました。")
         print(f"  エラー本体: {e}")
+        if hasattr(e, 'details'): print(f"  詳細(details): {e.details}")
 
 # -----------------------------------------------------------------
 # 4. メイン実行処理
