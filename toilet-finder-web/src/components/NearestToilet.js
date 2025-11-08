@@ -31,6 +31,7 @@ export default function NearestToilet() {
       // 成功時のコールバック
       async (position) => {
         const { latitude, longitude } = position.coords;
+        console.log("検知された現在地:", latitude, longitude); // ← これを追加
 
         try {
             // 3. FastAPIの最寄り検索APIを呼び出す
