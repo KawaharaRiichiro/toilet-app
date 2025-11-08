@@ -27,78 +27,63 @@ export default function InTrainSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLineLoading, setIsLineLoading] = useState(false);
 
+  // APIのベースURL（環境変数がない場合はローカルをデフォルトに）
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
   // 1. コンポーネント読み込み時に「駅名リスト」を取得
   useEffect(() => {
     const fetchStations = async () => {
-          try {
-            // 環境変数からAPIのベースURLを取得
-            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const res = await fetch(`${API_BASE_URL}/api/stations`);
+      try {
+        // ★修正箇所1: バックエンドのURLを指定
+        const res = await fetch(`${API_BASE_URL}/api/stations`);
         
-        // ★★★ 修正箇所: 成功したかチェック ★★★
         if (!res.ok) {
-          throw new Error('駅リストのAPI取得に失敗しました');
+          throw new Error(`駅リスト取得エラー: ${res.status}`);
         }
-        
         const data = await res.json();
-        
-        // ★★★ 修正箇所: dataが配列であるか確認 ★★★
-        if (Array.isArray(data)) {
-          setStationList(data);
-          if (data.length > 0) {
-            setStation(data[0]); // リストの最初の駅をデフォルト選択
-          }
-        } else {
-          throw new Error('APIが配列でないデータを返しました');
-        }
-        
+        setStationList(data);
+        // 初期値として最初の駅をセット（オプション）
+        if (data.length > 0) setStation(data[0]);
       } catch (err) {
         console.error("駅リストの取得に失敗", err);
+        setError("駅リストのAPI取得に失敗しました");
       }
     };
     fetchStations();
-  }, []); // 空の配列[] = 読み込み時に1回だけ実行
+  }, []); // 初回のみ実行
 
-  // 2. 「駅名」が変更されたら、その駅の「路線リスト」を取得
+  // 2. 駅名が選択されたら「路線リスト」を取得
   useEffect(() => {
-    if (!station) return; // 駅が未選択なら何もしない
+    if (!station) return;
 
     const fetchLines = async () => {
-      setIsLineLoading(true);
-      setLineList([]); // 路線リストをリセット
       try {
-            // 環境変数からAPIのベースURLを取得
-            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            // クエリパラメータで駅名、路線名、号車を送信
-            const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${station}&line=${line}&car=${car}`);
-
-            if (!res.ok) {
-              throw new Error('路線リストのAPI取得に失敗しました');
-           }
+        setIsLineLoading(true);
+        // ★修正箇所2: バックエンドのURLを指定
+        const res = await fetch(`${API_BASE_URL}/api/lines?station=${station}`);
         
-        const data = await res.json();
-        
-        // ★★★ 修正箇所: dataが配列であるか確認 ★★★
-        if (Array.isArray(data)) {
-          setLineList(data);
-          if (data.length > 0) {
-            setLine(data[0]); // リストの最初の路線をデフォルト選択
-          }
-        } else {
-          throw new Error('APIが配列でないデータを返しました');
+        if (!res.ok) {
+           throw new Error(`路線リスト取得エラー: ${res.status}`);
         }
-        
+        const data = await res.json();
+        setLineList(data);
+        // 路線が変更されたら、選択中の路線をリセットまたは先頭にセット
+        if (data.length > 0) {
+            setLine(data[0]);
+        } else {
+            setLine('');
+        }
       } catch (err) {
         console.error("路線リストの取得に失敗", err);
+        setError("路線リストのAPI取得に失敗しました");
       } finally {
         setIsLineLoading(false);
       }
     };
-    
     fetchLines();
-  }, [station]); // station の値が変わるたびに実行
+  }, [station]); // stationが変更されるたびに実行
 
-  // 3. 検索ボタンが押された時の処理 (変更なし)
+  // 検索実行時の処理
   const handleSearch = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -106,69 +91,65 @@ export default function InTrainSearch() {
     setResult(null);
 
     try {
-      const params = new URLSearchParams({
-        station: station,
-        line: line,
-        car: car,
-      });
-      
-      const response = await fetch(`/api/in-train-search?${params.toString()}`);
-      
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || '検索に失敗しました');
+      // ★修正箇所3: バックエンドのURLを指定
+      // クエリパラメータで駅名、路線名、号車を送信
+      const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${station}&line=${line}&car=${car}`);
+
+      if (!res.ok) {
+        if (res.status === 404) {
+            throw new Error("指定された条件（駅・路線・号車）に一致するドア情報が見つかりませんでした。");
+        }
+        throw new Error(`サーバーエラー: ${res.status}`);
       }
 
-      const data = await response.json();
+      const data = await res.json();
       setResult(data);
 
     } catch (err) {
-      setError(err.message);
+      console.error("乗車中検索エラー:", err);
+      setError(err.message || "検索中にエラーが発生しました。");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-2">
-      <h2 className="text-xl font-bold text-blue-800 mb-2">🚃 電車内検索 (次の駅)</h2>
+    <div className="bg-white p-4 rounded-lg shadow-md">
+      <h2 className="text-lg font-bold mb-3 text-gray-700">🚃 乗車中から検索</h2>
       
-      {/* 検索フォーム */}
-      <form onSubmit={handleSearch} className="flex flex-wrap gap-2 items-end">
-        
-        {/* 駅名 (ドロップダウン) */}
-        <div className="form-control">
-          <label className="label-text">駅名</label>
+      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-2">
+        {/* 駅名セレクトボックス */}
+        <div className="form-control w-full max-w-[120px]">
+          <label className="label-text">駅</label>
           <select 
+            className="select select-bordered select-sm"
             value={station}
             onChange={(e) => setStation(e.target.value)}
-            className="select select-bordered select-sm"
             disabled={stationList.length === 0}
           >
-            {/* stationListが配列であることを前提とする */}
             {stationList.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
-        {/* 路線名 (ドロップダウン) */}
-        <div className="form-control">
-          <label className="label-text">路線名</label>
+        {/* 路線名セレクトボックス */}
+        <div className="form-control w-full max-w-[120px]">
+          <label className="label-text">路線</label>
           <select 
+            className="select select-bordered select-sm"
             value={line}
             onChange={(e) => setLine(e.target.value)}
-            className="select select-bordered select-sm"
             disabled={isLineLoading || lineList.length === 0}
           >
+             {/* 読み込み中、またはデータがない場合の表示 */}
             {isLineLoading ? (
               <option>読み込み中...</option>
             ) : (
-              /* lineListが配列であることを前提とする */
               lineList.map(l => <option key={l} value={l}>{l}</option>)
             )}
           </select>
         </div>
 
-        {/* 号車番号 (変更なし) */}
+        {/* 号車番号 */}
         <div className="form-control">
           <label className="label-text">号車</label>
           <input 
@@ -182,32 +163,40 @@ export default function InTrainSearch() {
           />
         </div>
 
-        {/* 検索ボタン (変更なし) */}
+        {/* 検索ボタン */}
         <button type="submit" className="btn btn-primary btn-sm" disabled={isLoading}>
           {isLoading ? '検索中...' : '検索'}
         </button>
       </form>
 
-      {/* --- 結果表示エリア (変更なし) --- */}
+      {/* --- 結果表示エリア --- */}
       {error && (
-        <div className="mt-3 text-red-600">
-          <strong>エラー:</strong> {error}
+        <div className="mt-3 text-red-600 text-sm font-bold">
+          {error}
         </div>
       )}
 
       {result && (
-        <div className="mt-3 p-3 bg-blue-100 rounded-lg">
-          <h3 className="font-bold">✅ ドアから一番近いトイレ</h3>
-          <p className="text-lg">
-            {result.name} 
-            <span className="text-red-600 font-bold ml-2">
-              (ドアから {formatDistance(result.distance_meters)})
-            </span>
-          </p>
-          <p className="text-sm text-gray-700">{result.address}</p>
+        <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+          <h3 className="font-bold text-blue-700 mb-1">🎯 ドアから一番近いトイレ</h3>
+          <div className="text-base font-extrabold">
+             {result.name}
+             <span className="ml-2 text-red-500">({formatDistance(result.distance_meters)})</span>
+          </div>
+          <p className="text-sm text-gray-600">{result.address}</p>
+           <div className="mt-2 flex gap-2 text-xs">
+              <span className={result.is_wheelchair_accessible ? "badge badge-success text-white" : "badge badge-ghost"}>
+                  車椅子{result.is_wheelchair_accessible ? '○' : '×'}
+              </span>
+              <span className={result.has_diaper_changing_station ? "badge badge-success text-white" : "badge badge-ghost"}>
+                  おむつ{result.has_diaper_changing_station ? '○' : '×'}
+              </span>
+              <span className={result.is_ostomate_accessible ? "badge badge-success text-white" : "badge badge-ghost"}>
+                  オストメイト{result.is_ostomate_accessible ? '○' : '×'}
+              </span>
+           </div>
         </div>
       )}
-
     </div>
   );
 }
