@@ -3,137 +3,109 @@
 import { useState } from "react";
 import ToiletMap from "@/components/map";
 import NearestToilet from "@/components/NearestToilet";
-import InTrainSearch from "@/components/InTrainSearch"; // インポート
+import InTrainSearch from "@/components/InTrainSearch";
 
 export default function Home() {
+  // タブの状態管理 ('current' = 現在地から, 'train' = 乗車中から)
+  const [activeTab, setActiveTab] = useState<'current' | 'train'>('current');
 
   // フィルターの状態
-// 修正案1
   const [filters, setFilters] = useState({
     wheelchair: false,
     diaper: false,
     ostomate: false,
-    inside_gate: null as boolean | null, // ← 「boolean または null だよ」と明示
+    inside_gate: null as boolean | null,
   });
 
-  // 改札内/外/全て ラジオボタン用の状態変更関数
   const handleGateFilterChange = (value: boolean | null) => {
-    setFilters(prev => ({
-      ...prev,
-      inside_gate: value
-    }));
+    setFilters(prev => ({ ...prev, inside_gate: value }));
   };
 
-  // 既存のチェックボックス用の状態変更関数
   const handleCheckboxChange = (key: 'wheelchair' | 'diaper' | 'ostomate') => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+    setFilters(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-gray-100">
 
-      {/* 1. ヘッダー (変更なし) */}
-      <header>
-        <div className="navbar bg-base-100 shadow-lg">
-          <div className="flex-1">
-            <a className="btn btn-ghost text-xl">トイレを探すアプリ</a>
-          </div>
+      {/* ヘッダー */}
+      <header className="navbar bg-base-100 shadow-sm z-20">
+        <div className="flex-1">
+          <a className="btn btn-ghost text-xl text-primary">🚽 トイレ探索アプリ</a>
         </div>
       </header>
 
-      {/* 2. 最寄りトイレ即時表示ペイン (変更なし) */}
-      <div className="bg-yellow-50 p-4 border-b border-yellow-200">
-        <NearestToilet />
-      </div>
-
-      {/* 3. フィルターUIエリア (変更なし) */}
-      <div className="bg-base-100 p-3 flex flex-wrap overflow-x-auto items-center gap-4">
-        {/* ... (チェックボックスとラジオボタン) ... */}
+      {/* コントロールパネル（タブ + 各機能 + フィルター） */}
+      <div className="flex flex-col z-10 shadow-md">
         
-        {/* --- 1. 車いす --- */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            className="checkbox checkbox-primary"
-            checked={filters.wheelchair}
-            onChange={() => handleCheckboxChange('wheelchair')}
-          />
-          <span className="label-text whitespace-nowrap">♿ 車いす</span>
-        </label>
+        {/* タブ切り替え */}
+        <div className="bg-base-200 p-2">
+          <div role="tablist" className="tabs tabs-boxed bg-white">
+            <a 
+              role="tab" 
+              className={`tab ${activeTab === 'current' ? 'tab-active !bg-primary !text-white' : ''}`}
+              onClick={() => setActiveTab('current')}
+            >
+              📍 現在地から
+            </a>
+            <a 
+              role="tab" 
+              className={`tab ${activeTab === 'train' ? 'tab-active !bg-primary !text-white' : ''}`}
+              onClick={() => setActiveTab('train')}
+            >
+              🚃 乗車中から
+            </a>
+          </div>
+        </div>
 
-        {/* --- 2. おむつ台 --- */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            className="checkbox checkbox-primary"
-            checked={filters.diaper}
-            onChange={() => handleCheckboxChange('diaper')}
-          />
-          <span className="label-text whitespace-nowrap">🚼 おむつ台</span>
-        </label>
+        {/* タブの中身 */}
+        <div className="bg-white">
+          {activeTab === 'current' && (
+            <div className="p-3 bg-yellow-50 border-b border-yellow-100 animation-fade-in">
+              <NearestToilet />
+            </div>
+          )}
+          {activeTab === 'train' && (
+             <div className="p-3 bg-blue-50 border-b border-blue-100 animation-fade-in">
+              <InTrainSearch />
+            </div>
+          )}
+        </div>
 
-        {/* --- 3. オストメイト --- */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            className="checkbox checkbox-primary"
-            checked={filters.ostomate}
-            onChange={() => handleCheckboxChange('ostomate')}
-          />
-          <span className="label-text whitespace-nowrap">🚻 オストメイト</span>
-        </label>
+        {/* 共通フィルター */}
+        <div className="bg-base-100 p-3 border-t border-base-200 overflow-x-auto">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* 設備フィルター */}
+            <div className="flex gap-2">
+              <label className="cursor-pointer label border rounded-lg px-2 py-1 hover:bg-base-200 transition">
+                <span className="label-text mr-2">♿ 車椅子</span>
+                <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.wheelchair} onChange={() => handleCheckboxChange('wheelchair')} />
+              </label>
+              <label className="cursor-pointer label border rounded-lg px-2 py-1 hover:bg-base-200 transition">
+                <span className="label-text mr-2">👶 おむつ</span>
+                <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.diaper} onChange={() => handleCheckboxChange('diaper')} />
+              </label>
+              <label className="cursor-pointer label border rounded-lg px-2 py-1 hover:bg-base-200 transition">
+                <span className="label-text mr-2">✚ オストメイト</span>
+                <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.ostomate} onChange={() => handleCheckboxChange('ostomate')} />
+              </label>
+            </div>
 
-        {/* --- 4. 駅トイレ --- */}
-        <div className="flex items-center gap-2">
-          <span className="label-text whitespace-nowrap">🚇 駅トイレ:</span>
-          {/* ラジオボタングループ */}
-          <label className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="radio"
-              name="gate-filter"
-              className="radio radio-primary"
-              checked={filters.inside_gate === true}
-              onChange={() => handleGateFilterChange(true)}
-            />
-            <span>改札内</span>
-          </label>
-          <label className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="radio"
-              name="gate-filter"
-              className="radio radio-primary"
-              checked={filters.inside_gate === false}
-              onChange={() => handleGateFilterChange(false)}
-            />
-            <span>改札外</span>
-          </label>
-          <label className="flex items-center gap-1 cursor-pointer">
-            <input
-              type="radio"
-              name="gate-filter"
-              className="radio radio-primary"
-              checked={filters.inside_gate === null}
-              onChange={() => handleGateFilterChange(null)}
-            />
-            <span>全て</span>
-          </label>
+            {/* 場所フィルター */}
+            <div className="join">
+              <input className="join-item btn btn-sm" type="radio" name="gate" aria-label="全て" checked={filters.inside_gate === null} onChange={() => handleGateFilterChange(null)} />
+              <input className="join-item btn btn-sm" type="radio" name="gate" aria-label="改札内" checked={filters.inside_gate === true} onChange={() => handleGateFilterChange(true)} />
+              <input className="join-item btn btn-sm" type="radio" name="gate" aria-label="改札外" checked={filters.inside_gate === false} onChange={() => handleGateFilterChange(false)} />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ★★★ 修正箇所: 電車内検索ペインをここに移動 ★★★ */}
-      <div className="bg-blue-50 p-4 border-t border-b border-blue-200">
-        <InTrainSearch />
-      </div>
-
-      {/* 4. メインコンテンツ (地図) (変更なし) */}
-      {/* flex-grow が指定されているため、地図が残りのスペースをすべて埋めます */}
-      <main className="flex-grow">
+      {/* 地図 */}
+      <main className="flex-grow relative">
         <ToiletMap filters={filters} />
       </main>
-      
+
     </div>
   );
 }

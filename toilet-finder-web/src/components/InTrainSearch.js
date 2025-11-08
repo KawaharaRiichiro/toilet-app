@@ -195,12 +195,12 @@ export default function InTrainSearch() {
               </span>
            </div>
            
-           <a 
-            href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="btn btn-primary btn-sm w-full mt-3 text-white no-underline"
-          >
+            <a 
+              href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="btn btn-primary btn-sm w-full mt-3 text-white no-underline"
+            >
             Googleマップでルート案内 🏃‍♂️
           </a>
         </div>

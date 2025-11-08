@@ -117,9 +117,9 @@ export default function NearestToilet() {
           <p className="text-gray-700 text-sm">
             {nearestToilet.opening_hours && `時間: ${nearestToilet.opening_hours}`}
           </p>
-          {/* Googleマップへのリンク (修正済み) */}
+          {/* ★URLを修正しました★ */}
           <a 
-            href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`} 
+            href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
             className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-200 w-full sm:w-auto text-center"
