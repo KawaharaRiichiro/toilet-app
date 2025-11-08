@@ -1,0 +1,15 @@
+# 仮想環境フォルダを除外
+venv/
+.venv/
+
+# Pythonの一時ファイルを除外
+__pycache__/
+*.py[cod]
+
+# 環境変数ファイルを除外（セキュリティのため必須）
+.env
+.env.local
+
+# Next.jsのビルド成果物などを除外
+toilet-finder-web/.next/
+toilet-finder-web/node_modules/
