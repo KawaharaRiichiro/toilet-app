@@ -111,15 +111,15 @@ export default function NearestToilet() {
              </p>
            ) : <div></div>}
            
-          {/* ★修正: ルート案内ボタン (ラベル付き・公式URL) */}
+          {/* ★修正: ボタンのスタイルを直接指定し、URLも修正 */}
           <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="btn btn-primary text-white no-underline flex items-center gap-2 px-6"
+            className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-2 no-underline transition-colors shadow-sm"
           >
             <span className="text-xl">🗺️</span>
-            <span className="font-bold">ルート案内</span>
+            <span>ルート案内</span>
           </a>
         </div>
       </div>
