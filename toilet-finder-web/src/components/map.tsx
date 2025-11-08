@@ -152,7 +152,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
 
             {/* Googleマップへのリンク (修正済み) */}
             <a
-               href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
+               href={`https://www.google.com/maps?q=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
                className="btn btn-primary btn-sm w-full mt-3 text-white no-underline"
