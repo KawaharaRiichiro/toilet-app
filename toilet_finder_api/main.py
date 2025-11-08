@@ -16,9 +16,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 TABLE_NAME = 'toilets'
 
 # 各自治体のデータURL
-# 墨田区 (CSVに変更)
 SUMIDA_CSV_URL = "https://www.opendata.metro.tokyo.lg.jp/sumida/131075_public_toilet.csv"
-# 新宿区 (CSV)
 SHINJUKU_CSV_URL = "https://www.city.shinjuku.lg.jp/content/000399974.csv"
 
 # -----------------------------------------------------------------
@@ -29,29 +27,24 @@ def get_sumida_data():
     """ 墨田区のデータをCSVから取得・加工 """
     print("墨田区のデータを取得します(CSV)...")
     try:
-        # CSVを読み込む (文字コードはUTF-8と想定、ダメならcp932を試す)
+        # 墨田区はUTF-8またはcp932を想定
         try:
             df = pd.read_csv(SUMIDA_CSV_URL, encoding="utf-8")
         except UnicodeDecodeError:
-            df = pd.read_csv(SUMIDA_CSV_URL, encoding="cp932")
+            df = pd.read_csv(SUMIDA_CSV_URL, encoding="cp932", errors='replace')
 
         processed_data = []
         for _, row in df.iterrows():
-            # 緯度経度が取得できないデータは除外
             if pd.isna(row.get('緯度')) or pd.isna(row.get('経度')):
                 continue
 
             processed_data.append({
-                "name": row.get("名称"),      # カラム名をCSVに合わせて変更
-                "address": row.get("所在地"), # カラム名をCSVに合わせて変更
+                "name": row.get("名称"),
+                "address": row.get("所在地"),
                 "latitude": float(row.get("緯度")),
                 "longitude": float(row.get("経度")),
-                # 墨田区CSVには営業時間などの情報がない場合が多いのでNone
                 "opening_hours": None, 
                 "availability_notes": None,
-                # 設備情報もCSVに含まれていなければ全てFalseまたは不明とする
-                # もし「多機能トイレ」などのカラムがあれば、以下のように設定可能
-                # "is_wheelchair_accessible": row.get("多機能トイレ") == "有",
                 "is_wheelchair_accessible": False, 
                 "has_diaper_changing_station": False,
                 "is_ostomate_accessible": False,
@@ -73,13 +66,28 @@ def get_shinjuku_data():
         response = requests.get(SHINJUKU_CSV_URL)
         response.raise_for_status()
         
-        # 文字コード判定（UTF-8を先に試し、ダメならCP932）
+        # ★修正: UTF-16 でデコードを試みる
         try:
-            csv_data = response.content.decode('utf-8')
-        except UnicodeDecodeError:
-            csv_data = response.content.decode('cp932')
+            # 'utf-16' は BOM の有無を自動判定してくれます
+            df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16', sep='\t') 
+            # ※ UTF-16のCSVはタブ区切り(TSV)になっていることも多いため、sep='\t' も試す価値あり。
+            # もしカンマ区切りなら sep=',' (デフォルト) に戻してください。
+            # 一旦、標準的なカンマ区切りと仮定して sep 指定なしで試してみます↓
+            # df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16')
             
-        df = pd.read_csv(io.StringIO(csv_data))
+            # もし上記で「1列しか認識されない」などの場合は、区切り文字が違う可能性があります。
+            # エラーが出る場合は、以下のいずれかを試してみてください:
+            # df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16', sep='\t')
+             
+        except Exception:
+             # UTF-16で失敗した場合の予備（念のため）
+             df = pd.read_csv(io.BytesIO(response.content), encoding='cp932', errors='replace')
+
+        # もしカンマ区切りで正しく読めていれば、カラム名が認識されているはず
+        if '緯度' not in df.columns:
+             # カンマじゃなかった可能性が高いので、タブ区切りで再トライ
+             print("  (カンマ区切りで失敗したため、タブ区切りで再試行します...)")
+             df = pd.read_csv(io.BytesIO(response.content), encoding='utf-16', sep='\t')
 
         processed_data = []
         for _, row in df.iterrows():
@@ -111,46 +119,30 @@ def get_shinjuku_data():
 # ★ 新規追加用テンプレート関数 (変更なし) ★
 # =================================================================
 def get_new_ward_data_template():
-    # ... (省略: 前回のコードと同じ) ...
-    ward_name = "〇〇区"
-    # ...
+    # ... (省略) ...
     return []
 
 # -----------------------------------------------------------------
-# 3. Supabase更新関数 (Upsertに変更済み)
+# 3. Supabase更新関数 (変更なし)
 # -----------------------------------------------------------------
 def update_supabase(data_list):
-    """ 収集したデータをSupabaseにアップサートする """
+    """ 収集したデータをSupabaseにInsertする """
     if not data_list:
         print("更新対象のデータがありません。")
         return
 
     try:
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-        # 全件削除は廃止 (外部キー制約のため)
-        # print("既存のデータを削除しています...")
-        # supabase.table(TABLE_NAME).delete().gt('created_at', '1970-01-01').execute()
-
-        print(f"Supabaseに {len(data_list)} 件のデータを Upsert (更新・挿入) します...")
-        
+        print(f"Supabaseに {len(data_list)} 件のデータを Insert (挿入) します...")
         CHUNK_SIZE = 500 
         for i in range(0, len(data_list), CHUNK_SIZE):
             chunk = data_list[i:i + CHUNK_SIZE]
-            # upsert を使用（on_conflict に一意なカラムを指定する必要があるが、
-            # 現状は name と address の複合キーなどが候補。
-            # 一旦は単純な insert で進めるが、重複の可能性あり。
-            # 本格運用時は、各データに一意な ID (例: "sumida_001") を生成して付与することを推奨）
-            supabase.table(TABLE_NAME).upsert(chunk).execute() 
-            
+            supabase.table(TABLE_NAME).insert(chunk).execute()
             print(f"  ... {min(i + CHUNK_SIZE, len(data_list))} / {len(data_list)} 件 処理完了")
-
         print("\nデータの同期が正常に完了しました！")
     except Exception as e:
         print(f"\nエラー(Supabase): データベースの更新に失敗しました。")
-        if hasattr(e, 'details'): print(f"  詳細: {e.details}")
-        elif hasattr(e, 'message'): print(f"  詳細: {e.message}")
-        else: print(f"  詳細: {e}")
+        print(f"  エラー本体: {e}")
 
 # -----------------------------------------------------------------
 # 4. メイン実行処理
@@ -164,17 +156,9 @@ def main():
     start_time = time.time()
 
     all_toilet_data = []
-
-    # 1. 墨田区 (CSV)
     all_toilet_data.extend(get_sumida_data())
-    
-    # 2. 新宿区 (CSV)
     all_toilet_data.extend(get_shinjuku_data())
-
-    # 3. 駅トイレ (ローカルCSV)
     all_toilet_data.extend(get_station_data_from_csv())
-
-    # 4. その他
     all_toilet_data.extend(get_new_ward_data_template()) 
 
     print(f"\n合計 {len(all_toilet_data)} 件のデータを収集しました。")

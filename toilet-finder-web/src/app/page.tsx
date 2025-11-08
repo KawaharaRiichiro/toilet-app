@@ -26,17 +26,17 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-gray-100">
 
-      {/* ヘッダー */}
+      {/* ヘッダー (タイトル変更) */}
       <header className="navbar bg-primary text-primary-content shadow-md z-20">
         <div className="flex-1">
-          <span className="text-xl font-bold px-4">🚽 トイレ探索アプリ</span>
+          <span className="text-xl font-bold px-4">🚽 トイレ探索アプリ　すぐそこトイレ</span>
         </div>
       </header>
 
       {/* コントロールパネル */}
       <div className="flex flex-col z-10 shadow-md bg-base-100">
         
-        {/* タブ切り替え (tabs-boxed に変更して視認性向上) */}
+        {/* タブ切り替え */}
         <div className="p-3 bg-base-200">
           <div role="tablist" className="tabs tabs-boxed bg-gray-300 p-1">
             <a 
