@@ -30,8 +30,10 @@ export default function InTrainSearch() {
   // 1. コンポーネント読み込み時に「駅名リスト」を取得
   useEffect(() => {
     const fetchStations = async () => {
-      try {
-        const res = await fetch('/api/stations');
+          try {
+            // 環境変数からAPIのベースURLを取得
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${API_BASE_URL}/api/stations`);
         
         // ★★★ 修正箇所: 成功したかチェック ★★★
         if (!res.ok) {
@@ -65,13 +67,14 @@ export default function InTrainSearch() {
       setIsLineLoading(true);
       setLineList([]); // 路線リストをリセット
       try {
-        const params = new URLSearchParams({ station: station });
-        const res = await fetch(`/api/lines?${params.toString()}`);
-        
-        // ★★★ 修正箇所: 成功したかチェック ★★★
-        if (!res.ok) {
-          throw new Error('路線リストのAPI取得に失敗しました');
-        }
+            // 環境変数からAPIのベースURLを取得
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            // クエリパラメータで駅名、路線名、号車を送信
+            const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${station}&line=${line}&car=${car}`);
+
+            if (!res.ok) {
+              throw new Error('路線リストのAPI取得に失敗しました');
+           }
         
         const data = await res.json();
         
