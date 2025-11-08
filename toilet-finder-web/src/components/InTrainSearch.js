@@ -89,14 +89,16 @@ export default function InTrainSearch() {
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md">
-      <h2 className="text-lg font-bold mb-3 text-gray-700">🚃 乗車中から検索</h2>
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-blue-100">
+      <h2 className="text-lg font-bold mb-3 text-blue-800 flex items-center gap-2">
+        <span>🚃</span> 乗車中から検索
+      </h2>
       
-      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-2">
-        <div className="form-control w-full max-w-[140px]">
-          <label className="label-text">路線</label>
+      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-3">
+        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
+          <label className="label-text font-bold text-gray-600 mb-1">路線</label>
           <select 
-            className="select select-bordered select-sm"
+            className="select select-bordered select-sm w-full"
             value={line}
             onChange={(e) => setLine(e.target.value)}
             disabled={lineList.length === 0}
@@ -106,10 +108,10 @@ export default function InTrainSearch() {
           </select>
         </div>
 
-        <div className="form-control w-full max-w-[140px]">
-          <label className="label-text">駅</label>
+        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
+          <label className="label-text font-bold text-gray-600 mb-1">駅</label>
           <select 
-            className="select select-bordered select-sm"
+            className="select select-bordered select-sm w-full"
             value={station}
             onChange={(e) => setStation(e.target.value)}
             disabled={isStationLoading || stationList.length === 0}
@@ -124,57 +126,60 @@ export default function InTrainSearch() {
           </select>
         </div>
 
-        <div className="form-control">
-          <label className="label-text">号車</label>
+        <div className="form-control w-24">
+          <label className="label-text font-bold text-gray-600 mb-1">号車</label>
           <input 
             type="number" 
             value={car}
             min="1"
             max="15"
             onChange={(e) => setCar(e.target.value)}
-            className="input input-bordered input-sm w-20" 
+            className="input input-bordered input-sm w-full" 
             required 
           />
         </div>
 
-        <button type="submit" className="btn btn-primary btn-sm" disabled={isLoading || !line || !station}>
-          {isLoading ? '検索中...' : '検索'}
+        <button type="submit" className="btn btn-primary btn-sm px-6" disabled={isLoading || !line || !station}>
+          {isLoading ? <span className="loading loading-spinner loading-xs"></span> : '検索'}
         </button>
       </form>
 
       {error && (
-        <div className="mt-3 text-red-600 text-sm font-bold">
+        <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
           {error}
         </div>
       )}
 
       {result && (
-        <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
-          <h3 className="font-bold text-blue-700 mb-1">🎯 このドアから一番便利なトイレ</h3>
-          <div className="text-base font-extrabold">
+        <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg animation-fade-in">
+          <h3 className="font-bold text-blue-700 mb-2 flex items-center gap-2">
+            <span>🎯</span> このドアから一番便利なトイレ
+          </h3>
+          <div className="text-lg font-extrabold text-gray-900">
              {result.name}
-             {/* 距離表示を削除しました */}
           </div>
-          <p className="text-sm text-gray-600">{result.address}</p>
-           <div className="mt-2 flex gap-2 text-xs flex-wrap">
-              <span className={result.is_wheelchair_accessible ? "badge badge-success text-white" : "badge badge-ghost"}>
-                  車椅子{result.is_wheelchair_accessible ? '○' : '×'}
+          <p className="text-sm text-gray-600 mt-1">{result.address}</p>
+           <div className="mt-3 flex gap-2 text-xs flex-wrap">
+              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
+                  ♿ 車椅子{result.is_wheelchair_accessible ? 'OK' : 'NG'}
               </span>
-              <span className={result.has_diaper_changing_station ? "badge badge-success text-white" : "badge badge-ghost"}>
-                  おむつ{result.has_diaper_changing_station ? '○' : '×'}
+              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
+                  👶 おむつ{result.has_diaper_changing_station ? 'OK' : 'NG'}
               </span>
-              <span className={result.is_ostomate_accessible ? "badge badge-success text-white" : "badge badge-ghost"}>
-                  オストメイト{result.is_ostomate_accessible ? '○' : '×'}
+              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
+                  ✚ オストメイト{result.is_ostomate_accessible ? 'OK' : 'NG'}
               </span>
            </div>
            
+           {/* Googleマップへのリンク (公式推奨フォーマット) */}
            <a 
-            href={`https://www.google.com/maps?q=${result.latitude},${result.longitude}`}
+            href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="btn btn-primary btn-sm w-full mt-3 text-white no-underline"
+            className="btn btn-primary btn-sm w-full mt-4 text-white no-underline flex items-center gap-2"
           >
-            Googleマップでルート案内 🏃‍♂️
+            <span>🗺️</span> Googleマップでルート案内
           </a>
         </div>
       )}
