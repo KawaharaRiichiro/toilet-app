@@ -8,11 +8,12 @@ import InTrainSearch from "@/components/InTrainSearch"; // インポート
 export default function Home() {
 
   // フィルターの状態
+// 修正案1
   const [filters, setFilters] = useState({
     wheelchair: false,
     diaper: false,
     ostomate: false,
-    inside_gate: null, // null: 全て, true: 改札内, false: 改札外
+    inside_gate: null as boolean | null, // ← 「boolean または null だよ」と明示
   });
 
   // 改札内/外/全て ラジオボタン用の状態変更関数
