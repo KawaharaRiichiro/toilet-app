@@ -21,13 +21,10 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
-
-# --- ここから追加 ---
-# 許可するオリジン（フロントエンドのURL）を設定
 origins = [
-    "http://localhost:3000",               # ローカル開発用
-    "https://toilet-app-tau.vercel.app/
-
+    "http://localhost:3000",
+    "https://toilet-app-tau.vercel.app/", # ← ここを最新の正しいURLにする
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -35,8 +32,6 @@ app.add_middleware(
     allow_methods=["*"],  # 全てのHTTPメソッドを許可（GET, POSTなど）
     allow_headers=["*"],  # 全てのヘッダーを許可
 )
-# --- ここまで追加 ---
-
 # -----------------------------------------------------------------
 # Pydanticモデル (Supabaseのスキーマを定義)
 # -----------------------------------------------------------------
