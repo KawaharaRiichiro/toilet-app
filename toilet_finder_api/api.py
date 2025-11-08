@@ -22,7 +22,11 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
-# CORS設定（一時的に全許可）
+# -----------------------------------------------------------------
+# CORS設定
+# -----------------------------------------------------------------
+# Vercelからのアクセスを許可するため、一時的に全許可に設定しています。
+# 本番運用時は、セキュリティを高めるために特定のドメインのみ許可することをお勧めします。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 全てのオリジンを許可
@@ -83,7 +87,6 @@ async def get_toilets(
         
         # 改札内/外フィルター
         if inside_gate_filter is not None:
-            # クエリパラメータは文字列で来るため、ブール値に変換
             is_inside = inside_gate_filter.lower() == 'true'
             query = query.eq("is_station_toilet", True)
             query = query.eq("inside_gate", is_inside)
@@ -104,6 +107,7 @@ async def get_nearest_toilet(
     現在地から最も近いトイレを1件検索する (距離情報を付加)
     """
     try:
+        # SupabaseのRPC (find_nearest_toilet) を呼び出す
         response = supabase.rpc(
             'find_nearest_toilet',
             {'user_lat': lat, 'user_lon': lon}
@@ -125,8 +129,10 @@ async def get_station_names():
     """
     try:
         response = supabase.table('station_platform_doors').select('station_name').execute()
+        # 重複を排除してリスト化
         station_set = set(item['station_name'] for item in response.data)
-        return list(station_set)
+        # ソートして返す（オプション）
+        return sorted(list(station_set))
     except Exception as e:
         print(f"Error fetching station names: {e}")
         raise HTTPException(status_code=500, detail="駅名リストの取得に失敗しました")
@@ -139,14 +145,11 @@ async def get_line_names(station: str = Query(..., description="駅名")):
     try:
         response = supabase.table('station_platform_doors').select('line_name').eq('station_name', station).execute()
         line_set = set(item['line_name'] for item in response.data)
-        return list(line_set)
+        return sorted(list(line_set))
     except Exception as e:
         print(f"Error fetching line names: {e}")
         raise HTTPException(status_code=500, detail="路線名リストの取得に失敗しました")
 
-# -----------------------------------------------------------------
-# ★★★ 新規追加: 乗車中検索エンドポイント ★★★
-# -----------------------------------------------------------------
 @app.get("/api/train-toilet", response_model=NearestToiletResponse)
 async def get_train_toilet(
     station: str = Query(..., description="駅名"),
@@ -157,27 +160,25 @@ async def get_train_toilet(
     指定された駅・路線・号車のドア位置から、最も近いトイレを検索する
     """
     try:
-        # 1. station_platform_doors テーブルから、該当するドアの位置情報(緯度・経度)を取得
-        # ※データ構造によっては 'car_number' カラム名などが異なる可能性があります。要確認。
+        # 1. station_platform_doors テーブルから、該当するドアの位置情報を取得
+        # ★修正箇所: カラム名を door_latitude, door_longitude に変更
         door_response = supabase.table('station_platform_doors').select(
-            'latitude, longitude'
+            'door_latitude, door_longitude'
         ).eq('station_name', station).eq('line_name', line).eq('car_number', car).execute()
 
         if not door_response.data or len(door_response.data) == 0:
-             # 該当するドア情報がない場合
              print(f"Door not found for: {station}, {line}, Car {car}")
              raise HTTPException(status_code=404, detail="指定された条件のドア位置情報が見つかりませんでした")
         
-        # 複数のドア（例: 同じ号車に複数のドアがある）がヒットした場合は、とりあえず最初の1つを使う
         door_location = door_response.data[0]
-        door_lat = door_location.get('latitude')
-        door_lon = door_location.get('longitude')
+        # ★修正箇所: 取得したデータのキーも door_latitude, door_longitude に変更
+        door_lat = door_location.get('door_latitude')
+        door_lon = door_location.get('door_longitude')
 
         if not door_lat or not door_lon:
              raise HTTPException(status_code=500, detail="ドアの位置情報が不完全です")
 
         # 2. 取得したドアの緯度経度を使って、最寄りトイレ検索RPCを呼び出す
-        # これにより「その号車で降りた時に一番近いトイレ」が返る
         response = supabase.rpc(
             'find_nearest_toilet',
             {'user_lat': door_lat, 'user_lon': door_lon}
