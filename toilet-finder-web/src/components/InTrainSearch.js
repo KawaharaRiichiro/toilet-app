@@ -2,6 +2,15 @@
 
 import { useState, useEffect } from 'react';
 
+// 距離を整形するヘルパー関数
+const formatDistance = (meters) => {
+  if (typeof meters !== 'number' || isNaN(meters)) return '';
+  if (meters < 1000) {
+    return `${Math.round(meters)}m`;
+  }
+  return `${(meters / 1000).toFixed(1)}km`;
+};
+
 export default function InTrainSearch() {
   const [station, setStation] = useState(''); 
   const [line, setLine] = useState('');       
@@ -89,16 +98,18 @@ export default function InTrainSearch() {
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-blue-100">
-      <h2 className="text-lg font-bold mb-3 text-blue-800 flex items-center gap-2">
-        <span>🚃</span> 乗車中から検索
+    <div className="bg-white p-5 rounded-xl shadow-sm border border-blue-100">
+      <h2 className="text-lg font-bold mb-4 text-blue-800 flex items-center gap-2">
+        <span className="text-2xl">🚃</span> 乗車中から検索
       </h2>
       
-      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-3">
-        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
-          <label className="label-text font-bold text-gray-600 mb-1">路線</label>
+      {/* フォームを左寄せにし、最大幅を制限して見やすくする */}
+      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-3xl">
+        
+        <div className="form-control w-full sm:w-48">
+          <label className="label-text font-bold text-gray-600 mb-1 ml-1">路線</label>
           <select 
-            className="select select-bordered select-sm w-full"
+            className="select select-bordered w-full"
             value={line}
             onChange={(e) => setLine(e.target.value)}
             disabled={lineList.length === 0}
@@ -108,10 +119,10 @@ export default function InTrainSearch() {
           </select>
         </div>
 
-        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
-          <label className="label-text font-bold text-gray-600 mb-1">駅</label>
+        <div className="form-control w-full sm:w-48">
+          <label className="label-text font-bold text-gray-600 mb-1 ml-1">駅</label>
           <select 
-            className="select select-bordered select-sm w-full"
+            className="select select-bordered w-full"
             value={station}
             onChange={(e) => setStation(e.target.value)}
             disabled={isStationLoading || stationList.length === 0}
@@ -127,59 +138,69 @@ export default function InTrainSearch() {
         </div>
 
         <div className="form-control w-24">
-          <label className="label-text font-bold text-gray-600 mb-1">号車</label>
-          <input 
-            type="number" 
-            value={car}
-            min="1"
-            max="15"
-            onChange={(e) => setCar(e.target.value)}
-            className="input input-bordered input-sm w-full" 
-            required 
-          />
+          <label className="label-text font-bold text-gray-600 mb-1 ml-1">号車</label>
+          <div className="join">
+            <input 
+              type="number" 
+              value={car}
+              min="1"
+              max="15"
+              onChange={(e) => setCar(e.target.value)}
+              className="input input-bordered join-item w-full text-center" 
+              required 
+            />
+            <span className="btn btn-disabled join-item bg-base-200 border-base-300 text-gray-500 px-2">号車</span>
+          </div>
         </div>
 
-        <button type="submit" className="btn btn-primary btn-sm px-6" disabled={isLoading || !line || !station}>
-          {isLoading ? <span className="loading loading-spinner loading-xs"></span> : '検索'}
+        <button type="submit" className="btn btn-primary px-8" disabled={isLoading || !line || !station}>
+          {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
         </button>
       </form>
 
       {error && (
-        <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-          {error}
+        <div className="mt-5 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <span>{error}</span>
         </div>
       )}
 
       {result && (
-        <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg animation-fade-in">
-          <h3 className="font-bold text-blue-700 mb-2 flex items-center gap-2">
+        <div className="mt-5 p-5 bg-blue-50 border-l-4 border-blue-500 rounded-r-xl animation-fade-in shadow-sm">
+          <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-lg">
             <span>🎯</span> このドアから一番便利なトイレ
           </h3>
-          <div className="text-lg font-extrabold text-gray-900">
+          <div className="text-xl font-extrabold text-gray-900 ml-1">
              {result.name}
           </div>
-          <p className="text-sm text-gray-600 mt-1">{result.address}</p>
-           <div className="mt-3 flex gap-2 text-xs flex-wrap">
-              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
-                  ♿ 車椅子{result.is_wheelchair_accessible ? 'OK' : 'NG'}
+          <p className="text-sm text-gray-600 mt-1 ml-1 flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
+            {result.address}
+          </p>
+           
+           <div className="mt-4 flex gap-2 flex-wrap">
+              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white gap-1 pl-1.5" : "badge-ghost text-gray-400 gap-1 pl-1.5"}`}>
+                  {result.is_wheelchair_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                  車椅子
               </span>
-              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
-                  👶 おむつ{result.has_diaper_changing_station ? 'OK' : 'NG'}
+              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white gap-1 pl-1.5" : "badge-ghost text-gray-400 gap-1 pl-1.5"}`}>
+                  {result.has_diaper_changing_station && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                  おむつ
               </span>
-              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
-                  ✚ オストメイト{result.is_ostomate_accessible ? 'OK' : 'NG'}
+              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white gap-1 pl-1.5" : "badge-ghost text-gray-400 gap-1 pl-1.5"}`}>
+                  {result.is_ostomate_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                  オストメイト
               </span>
            </div>
            
-           {/* Googleマップへのリンク (公式推奨フォーマット) */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="btn btn-primary btn-sm w-full mt-4 text-white no-underline flex items-center gap-2"
+            className="btn btn-primary w-full sm:w-auto mt-5 text-white no-underline flex items-center justify-center gap-2"
           >
-            <span>🗺️</span> Googleマップでルート案内
+            <span className="text-xl">🗺️</span>
+            <span>トイレまでのルート</span>
           </a>
         </div>
       )}

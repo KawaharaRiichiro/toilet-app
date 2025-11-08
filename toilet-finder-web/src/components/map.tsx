@@ -114,7 +114,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
           options={{ pixelOffset: new google.maps.Size(0, -30) }}
         >
           {/* 吹き出しの中身 */}
-          <div className="p-1 min-w-[200px] text-gray-800">
+          <div className="p-1 min-w-[220px] text-gray-800">
             <h3 className="font-bold text-base text-blue-700 mb-2">{selectedToilet.name}</h3>
             
             {/* 営業時間 */}
@@ -150,20 +150,20 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
                </div>
             </div>
 
-                {/* Googleマップへのリンク (公式推奨フォーマット) */}
+            {/* Googleマップへのリンク (ラベル付き) */}
             <a
                href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
-               className="btn btn-primary btn-sm w-full mt-3 text-white no-underline flex items-center justify-center gap-1"
+               className="btn btn-primary btn-sm w-full mt-3 text-white no-underline flex items-center justify-center gap-2"
             >
-              <span>🗺️</span> ここへ行く
+              <span className="text-lg">🗺️</span>
+              <span>トイレまでのルート</span>
             </a>
           </div>
         </InfoWindowF>
       )}
     </GoogleMap>
-
   ) : (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
       <p className="text-gray-500 animate-pulse">地図を読み込み中...</p>
