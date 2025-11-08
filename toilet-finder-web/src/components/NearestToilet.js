@@ -117,21 +117,22 @@ export default function NearestToilet() {
              </span>
         </div>
         
-        <div className="mt-4">
-           {nearestToilet.opening_hours && (
-             <p className="text-gray-600 text-sm flex items-center gap-1 mb-3">
+        <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+           {nearestToilet.opening_hours ? (
+             <p className="text-gray-600 text-sm flex items-center gap-1">
                <span>🕘</span> 時間: {nearestToilet.opening_hours}
              </p>
-           )}
+           ) : <div></div>}
            
-          {/* Googleマップへのリンク (公式推奨フォーマット) */}
+          {/* ★修正: Googleマップへのリンク (ラベルを確実に表示) */}
           <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="btn btn-primary w-full text-white no-underline flex items-center gap-2"
+            className="btn btn-primary text-white no-underline flex items-center gap-2 px-6"
           >
-            <span>🗺️</span> Googleマップでルート案内
+            <span className="text-xl">🗺️</span>
+            <span className="font-bold">ルート案内</span>
           </a>
         </div>
 

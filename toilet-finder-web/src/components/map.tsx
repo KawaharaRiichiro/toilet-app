@@ -150,20 +150,20 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
                </div>
             </div>
 
-            {/* Googleマップへのリンク (ラベル付き) */}
+            {/* Googleマップへのリンク (公式推奨フォーマット) */}
             <a
                href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
-               className="btn btn-primary btn-sm w-full mt-3 text-white no-underline flex items-center justify-center gap-2"
+               className="btn btn-primary btn-sm w-full mt-3 text-white no-underline flex items-center justify-center gap-1"
             >
-              <span className="text-lg">🗺️</span>
-              <span>トイレまでのルート</span>
+              <span>🗺️</span> ルート案内
             </a>
           </div>
         </InfoWindowF>
       )}
     </GoogleMap>
+    
   ) : (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
       <p className="text-gray-500 animate-pulse">地図を読み込み中...</p>

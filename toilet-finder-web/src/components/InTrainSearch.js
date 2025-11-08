@@ -2,15 +2,6 @@
 
 import { useState, useEffect } from 'react';
 
-// 距離を整形するヘルパー関数
-const formatDistance = (meters) => {
-  if (typeof meters !== 'number' || isNaN(meters)) return '';
-  if (meters < 1000) {
-    return `${Math.round(meters)}m`;
-  }
-  return `${(meters / 1000).toFixed(1)}km`;
-};
-
 export default function InTrainSearch() {
   const [station, setStation] = useState(''); 
   const [line, setLine] = useState('');       
@@ -103,7 +94,6 @@ export default function InTrainSearch() {
         <span className="text-2xl">🚃</span> 乗車中から検索
       </h2>
       
-      {/* フォームを左寄せにし、最大幅を制限して見やすくする */}
       <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-3xl">
         
         <div className="form-control w-full sm:w-48">
@@ -160,13 +150,13 @@ export default function InTrainSearch() {
 
       {error && (
         <div className="mt-5 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-3">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 flex-shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <span className="text-xl">🚨</span>
           <span>{error}</span>
         </div>
       )}
 
       {result && (
-        <div className="mt-5 p-5 bg-blue-50 border-l-4 border-blue-500 rounded-r-xl animation-fade-in shadow-sm">
+        <div className="mt-6 p-5 bg-blue-50 border-l-4 border-blue-500 rounded-r-xl animation-fade-in shadow-sm">
           <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-lg">
             <span>🎯</span> このドアから一番便利なトイレ
           </h3>
@@ -193,14 +183,15 @@ export default function InTrainSearch() {
               </span>
            </div>
            
+           {/* ★修正: Googleマップへのリンク (確実に表示) */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="btn btn-primary w-full sm:w-auto mt-5 text-white no-underline flex items-center justify-center gap-2"
+            className="btn btn-primary w-full sm:w-auto mt-5 text-white no-underline flex items-center justify-center gap-2 px-6"
           >
             <span className="text-xl">🗺️</span>
-            <span>トイレまでのルート</span>
+            <span className="font-bold">ルート案内</span>
           </a>
         </div>
       )}
