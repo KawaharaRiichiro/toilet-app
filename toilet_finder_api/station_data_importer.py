@@ -1,77 +1,61 @@
 import pandas as pd
 import time
+import uuid
 from typing import List, Dict, Any
 
-# 駅トイレデータCSVのファイル名
-STATION_CSV_FILE = "トイレリスト.csv"
+# ファイル名を定義
+STATION_CSV_FILE = "station_toilet.csv"
 
 def get_station_data_from_csv() -> List[Dict[str, Any]]:
-    """
-    駅のトイレデータをCSVファイルから読み込み、Supabaseスキーマに加工して返す。
-    """
     print(f"駅トイレデータCSV ({STATION_CSV_FILE}) を読み込みます...")
     processed_list = []
 
     try:
-        # header=None, skiprows=1 で、1行目をスキップしてデータのみ読み込む
-        # ※実際のCSVに合わせて調整が必要な場合があります
-        df = pd.read_csv(STATION_CSV_FILE, encoding='utf-8', header=None, skiprows=1)
-        
-        # カラム数チェック (最低限必要な6カラムがあるか)
-        if df.shape[1] < 6:
-             print(f"エラー(駅CSV): CSVのカラム数が不足しています (実測 {df.shape[1]})")
-             return []
-        
-        # 欠損値(NaN)をNoneに変換
-        df = df.where(pd.notnull(df), None)
+        try:
+            df = pd.read_csv(STATION_CSV_FILE, encoding='utf-8')
+        except UnicodeDecodeError:
+            df = pd.read_csv(STATION_CSV_FILE, encoding='cp932')
 
         for _, row in df.iterrows():
-            # 必須データのチェック
-            if row[0] is None or row[1] is None: # 名称と座標は必須
-                 continue
+            # ★修正: 英語('name') と 日本語('名称') の両方に対応
+            name = row.get('name') or row.get('名称')
+            if pd.isna(name): continue
+
+            # IDの取得
+            toilet_id = str(row.get('id')).strip() if pd.notna(row.get('id')) else str(uuid.uuid4())
 
             try:
-                # 座標の分割と変換 ("緯度,経度" の形式を想定)
-                lat_lon = str(row[1]).split(',')
-                if len(lat_lon) != 2:
-                    raise ValueError("座標フォーマットエラー")
-                latitude = float(lat_lon[0].strip())
-                longitude = float(lat_lon[1].strip())
+                # 座標の取得 ("latitude,longitude" という結合カラムにも対応)
+                lat_lon_val = row.get('latitude,longitude') or row.get('座標')
+                if pd.notna(lat_lon_val) and ',' in str(lat_lon_val):
+                    lat_str, lon_str = str(lat_lon_val).split(',')
+                    lat = float(lat_str.strip('" '))
+                    lon = float(lon_str.strip('" '))
+                else:
+                    lat = float(row.get('latitude') or row.get('緯度'))
+                    lon = float(row.get('longitude') or row.get('経度'))
+            except (ValueError, TypeError):
+                 print(f"警告: {name} の座標が無効です。スキップします。")
+                 continue
 
-                # 住所の生成
-                address_str = str(row[5]) if row[5] else f"{row[3]} 構内"
-                
-            except (ValueError, IndexError):
-                print(f"警告: {row[0]} のデータ形式が無効です。スキップします。")
-                continue
+            def to_bool(val):
+                return str(val).strip().upper() in ['TRUE', 'YES', '1', 'あり', '○']
 
-            # ブール値への変換 ('TRUE'/'FALSE'文字列などを想定)
-            is_wheelchair = str(row[2]).strip().upper() == 'TRUE' if row[2] else False
-            inside_gate_bool = str(row[4]).strip().upper() == 'TRUE' if row[4] else False
-
-            # 現在時刻の文字列
             current_time = time.strftime('%Y-%m-%dT%H:%M:%SZ')
 
             processed_list.append({
-                'name': row[0],         
-                'address': address_str, 
-                'latitude': latitude,        
-                'longitude': longitude,
-                
-                # アクセシビリティ (CSVにない項目はFalse固定)
-                'is_wheelchair_accessible': is_wheelchair,
-                'has_diaper_changing_station': False, 
-                'is_ostomate_accessible': False, 
-                
-                # 駅トイレ関連
+                'id': toilet_id,
+                'name': name,
+                'address': row.get('address') or row.get('住所') or f"{row.get('station_name') or row.get('駅名')} 構内",
+                'latitude': lat,
+                'longitude': lon,
+                'is_wheelchair_accessible': to_bool(row.get('is_wheelchair_accessible') or row.get('車椅子')),
+                'has_diaper_changing_station': False,
+                'is_ostomate_accessible': False,
                 'is_station_toilet': True,
-                'inside_gate': inside_gate_bool,
-
-                # その他
-                'opening_hours': None, 
-                'availability_notes': None, 
-
-                # ★★★ 必須カラムを追加 ★★★
+                'inside_gate': to_bool(row.get('inside_gate') or row.get('改札内')),
+                'opening_hours': None,
+                'availability_notes': None,
                 'created_at': current_time,
                 'updated_at': current_time,
             })
@@ -80,8 +64,8 @@ def get_station_data_from_csv() -> List[Dict[str, Any]]:
         return processed_list
 
     except FileNotFoundError:
-        print(f"エラー: 駅トイレデータCSV ({STATION_CSV_FILE}) が見つかりません。")
+        print(f"エラー: {STATION_CSV_FILE} が見つかりません。")
         return []
     except Exception as e:
-        print(f"駅トイレデータの読み込み中に予期せぬエラーが発生しました: {e}")
+        print(f"駅トイレデータの読み込みエラー: {e}")
         return []

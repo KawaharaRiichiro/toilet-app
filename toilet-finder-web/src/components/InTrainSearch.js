@@ -136,15 +136,15 @@ export default function InTrainSearch() {
               <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>✚ オストメイト</span>
            </div>
            
-           {/* ★修正: ボタンのスタイルを直接指定し、URLも修正 */}
+           {/* ★修正: ルート案内ボタン (左寄せ統一・レスポンシブ対応) */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="mt-5 w-full sm:w-auto py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 no-underline transition-colors shadow-sm"
+            className="mt-5 btn btn-primary w-full sm:w-auto text-white no-underline flex items-center justify-center sm:justify-start gap-2 px-6"
           >
             <span className="text-xl">🗺️</span>
-            <span>ルート案内</span>
+            <span className="font-bold">ルート案内</span>
           </a>
         </div>
       )}

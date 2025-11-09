@@ -104,22 +104,22 @@ export default function NearestToilet() {
              </span>
         </div>
         
-        <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-           {nearestToilet.opening_hours ? (
-             <p className="text-gray-600 text-sm flex items-center gap-1">
+        <div className="mt-4">
+           {nearestToilet.opening_hours && (
+             <p className="text-gray-600 text-sm flex items-center gap-1 mb-3">
                <span>🕘</span> 時間: {nearestToilet.opening_hours}
              </p>
-           ) : <div></div>}
+           )}
            
-          {/* ★修正: ボタンのスタイルを直接指定し、URLも修正 */}
+          {/* Googleマップへのリンク (左寄せ統一・レスポンシブ対応) */}
           <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-2 no-underline transition-colors shadow-sm"
+            className="btn btn-primary w-full sm:w-auto text-white no-underline flex items-center gap-2 justify-center sm:justify-start px-6"
           >
             <span className="text-xl">🗺️</span>
-            <span>ルート案内</span>
+            <span className="font-bold">ルート案内</span>
           </a>
         </div>
       </div>
