@@ -88,9 +88,11 @@ export default function InTrainSearch() {
         <span className="text-2xl">🚃</span> 乗車中から検索
       </h2>
       
-      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-3xl">
-        <div className="form-control w-full sm:w-48">
-          <label className="label">
+      {/* フォーム全体のレイアウトを調整 */}
+      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-4xl">
+        
+        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
+          <label className="label py-1">
             <span className="label-text font-bold text-gray-600">路線</span>
           </label>
           <select 
@@ -104,8 +106,8 @@ export default function InTrainSearch() {
           </select>
         </div>
 
-        <div className="form-control w-full sm:w-48">
-          <label className="label">
+        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
+          <label className="label py-1">
             <span className="label-text font-bold text-gray-600">駅</span>
           </label>
           <select 
@@ -114,40 +116,47 @@ export default function InTrainSearch() {
             onChange={(e) => setStation(e.target.value)}
             disabled={isStationLoading || stationList.length === 0}
           >
-            {isStationLoading ? <option>駅を読込中...</option> : stationList.length === 0 ? <option>駅なし</option> : stationList.map(s => <option key={s} value={s}>{s}</option>)}
+            {isStationLoading ? (
+              <option>駅を読込中...</option>
+            ) : stationList.length === 0 ? (
+              <option>駅なし</option>
+            ) : (
+              stationList.map(s => <option key={s} value={s}>{s}</option>)
+            )}
           </select>
         </div>
 
         <div className="form-control w-24">
-          <label className="label">
+          <label className="label py-1">
             <span className="label-text font-bold text-gray-600">号車</span>
           </label>
-          <div className="flex items-center">
+          <div className="flex items-center relative">
             <input 
               type="number" 
               value={car}
               min="1"
               max="15"
               onChange={(e) => setCar(e.target.value)}
-              className="input input-bordered w-full text-center pr-8" 
+              className="input input-bordered w-full pr-8 text-center" 
               required 
             />
-            <span className="-ml-8 text-gray-500 z-10 pointer-events-none">号車</span>
+            <span className="absolute right-2 text-gray-500 pointer-events-none text-sm">号車</span>
           </div>
         </div>
 
+        {/* 検索ボタン: ラベルなしで直接配置 */}
         <div className="form-control">
-          <label className="label invisible">
-            <span className="label-text">検索</span>
-          </label>
-          <button 
+           <button 
             type="submit" 
-            className="btn btn-primary px-8 text-white !text-white font-bold" 
+            // 背景色と文字色を強力に指定
+            className="btn bg-blue-600 hover:bg-blue-700 text-white border-none px-8 font-bold h-[3rem] min-h-[3rem]" 
+            style={{ color: 'white !important' }} // インラインスタイルで強制
             disabled={isLoading || !line || !station}
           >
             {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
           </button>
         </div>
+
       </form>
 
       {error && (
@@ -172,13 +181,14 @@ export default function InTrainSearch() {
               <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>✚ オストメイト</span>
            </div>
            
-           {/* ★再修正: テキスト色を明示的に指定 (text-white) */}
+           {/* ルート案内ボタン: インラインスタイルで白文字を強制 */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="mt-5 btn btn-primary w-full sm:w-auto text-white !text-white no-underline flex items-center justify-center sm:justify-start gap-2 px-6"
-          >
+            className="mt-5 btn bg-blue-600 hover:bg-blue-700 text-white border-none w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 px-6"
+            style={{ color: 'white !important', textDecoration: 'none' }}
+           >
             <span className="text-xl">🗺️</span>
             <span className="font-bold">ルート案内</span>
           </a>

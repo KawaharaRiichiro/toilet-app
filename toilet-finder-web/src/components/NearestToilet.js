@@ -111,12 +111,13 @@ export default function NearestToilet() {
              </p>
            ) : <div></div>}
            
-          {/* ★再修正: テキスト色を明示的に指定 (text-white) */}
+          {/* ルート案内ボタン: インラインスタイルで白文字を強制 */}
           <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="btn btn-primary text-white !text-white no-underline flex items-center gap-2 px-6"
+            className="btn bg-blue-600 hover:bg-blue-700 text-white border-none no-underline flex items-center gap-2 px-6"
+            style={{ color: 'white !important', textDecoration: 'none' }}
           >
             <span className="text-xl">🗺️</span>
             <span className="font-bold">ルート案内</span>

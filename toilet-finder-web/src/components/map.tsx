@@ -122,15 +122,16 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
                </div>
             </div>
 
-            {/* ★修正: ボタンのスタイルを直接指定し、URLも修正 */}
+            {/* ルート案内ボタン: インラインスタイルで白文字を強制 */}
             <a
                href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
-               className="mt-3 w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded flex items-center justify-center gap-2 no-underline transition-colors"
+               className="btn bg-blue-600 hover:bg-blue-700 text-white border-none btn-sm w-full mt-3 no-underline flex items-center justify-center gap-2"
+               style={{ color: 'white !important', textDecoration: 'none' }}
             >
               <span className="text-lg">🗺️</span>
-              <span>ルート案内</span>
+              <span className="font-bold">ルート案内</span>
             </a>
           </div>
         </InfoWindowF>
