@@ -88,9 +88,8 @@ export default function InTrainSearch() {
         <span className="text-2xl">🚃</span> 乗車中から検索
       </h2>
       
-      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4">
-        
-        <div className="form-control w-full sm:w-auto min-w-[140px] flex-1">
+      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-3xl">
+        <div className="form-control w-full sm:w-48">
           <label className="label">
             <span className="label-text font-bold text-gray-600">路線</span>
           </label>
@@ -105,7 +104,7 @@ export default function InTrainSearch() {
           </select>
         </div>
 
-        <div className="form-control w-full sm:w-auto min-w-[140px] flex-1">
+        <div className="form-control w-full sm:w-48">
           <label className="label">
             <span className="label-text font-bold text-gray-600">駅</span>
           </label>
@@ -115,13 +114,7 @@ export default function InTrainSearch() {
             onChange={(e) => setStation(e.target.value)}
             disabled={isStationLoading || stationList.length === 0}
           >
-            {isStationLoading ? (
-              <option>駅を読込中...</option>
-            ) : stationList.length === 0 ? (
-              <option>駅なし</option>
-            ) : (
-              stationList.map(s => <option key={s} value={s}>{s}</option>)
-            )}
+            {isStationLoading ? <option>駅を読込中...</option> : stationList.length === 0 ? <option>駅なし</option> : stationList.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
@@ -144,25 +137,22 @@ export default function InTrainSearch() {
         </div>
 
         <div className="form-control">
-          {/* ラベル分のスペースを空けるためのダミー */}
           <label className="label invisible">
             <span className="label-text">検索</span>
           </label>
           <button 
             type="submit" 
-            className="btn btn-primary px-8 text-white font-bold" 
+            className="btn btn-primary px-8 text-white !text-white font-bold" 
             disabled={isLoading || !line || !station}
           >
             {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
           </button>
         </div>
-
       </form>
 
       {error && (
         <div className="mt-5 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-3">
-          <span className="text-xl">🚨</span>
-          <span>{error}</span>
+          <span className="text-xl">🚨</span><span>{error}</span>
         </div>
       )}
 
@@ -171,28 +161,26 @@ export default function InTrainSearch() {
           <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-lg">
             <span>🎯</span> このドアから一番便利なトイレ
           </h3>
-          <div className="text-xl font-extrabold text-gray-900 ml-1">
-             {result.name}
-          </div>
+          <div className="text-xl font-extrabold text-gray-900 ml-1">{result.name}</div>
           <p className="text-sm text-gray-600 mt-1 ml-1 flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
             {result.address}
           </p>
-           
            <div className="mt-4 flex gap-2 flex-wrap">
               <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>♿ 車椅子</span>
               <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>👶 おむつ</span>
               <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>✚ オストメイト</span>
            </div>
            
+           {/* ★再修正: テキスト色を明示的に指定 (text-white) */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="mt-5 btn btn-primary w-full sm:w-auto text-white no-underline flex items-center justify-center sm:justify-start gap-2 px-6 font-bold"
+            className="mt-5 btn btn-primary w-full sm:w-auto text-white !text-white no-underline flex items-center justify-center sm:justify-start gap-2 px-6"
           >
             <span className="text-xl">🗺️</span>
-            <span>ルート案内</span>
+            <span className="font-bold">ルート案内</span>
           </a>
         </div>
       )}
