@@ -88,7 +88,6 @@ export default function InTrainSearch() {
         <span className="text-2xl">🚃</span> 乗車中から検索
       </h2>
       
-      {/* フォーム全体のレイアウトを調整 */}
       <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-4xl">
         
         <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
@@ -144,13 +143,11 @@ export default function InTrainSearch() {
           </div>
         </div>
 
-        {/* 検索ボタン: ラベルなしで直接配置 */}
         <div className="form-control">
            <button 
             type="submit" 
-            // 背景色と文字色を強力に指定
             className="btn bg-blue-600 hover:bg-blue-700 text-white border-none px-8 font-bold h-[3rem] min-h-[3rem]" 
-            style={{ color: 'white !important' }} // インラインスタイルで強制
+            style={{ color: 'white !important' }}
             disabled={isLoading || !line || !station}
           >
             {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
@@ -175,13 +172,23 @@ export default function InTrainSearch() {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
             {result.address}
           </p>
+           
+           {/* バッジの色を調整 */}
            <div className="mt-4 flex gap-2 flex-wrap">
-              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>♿ 車椅子</span>
-              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>👶 おむつ</span>
-              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>✚ オストメイト</span>
+              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "bg-gray-200 text-gray-600"} gap-1 pl-1.5`}>
+                  {result.is_wheelchair_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                  車椅子
+              </span>
+              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "bg-gray-200 text-gray-600"} gap-1 pl-1.5`}>
+                  {result.has_diaper_changing_station && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                  おむつ
+              </span>
+              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "bg-gray-200 text-gray-600"} gap-1 pl-1.5`}>
+                  {result.is_ostomate_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                  オストメイト
+              </span>
            </div>
            
-           {/* ルート案内ボタン: インラインスタイルで白文字を強制 */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 

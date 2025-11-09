@@ -70,7 +70,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* 共通フィルター (見出しを追加して整理) */}
+        {/* 共通フィルター */}
         <div className="bg-base-100 p-3 overflow-x-auto whitespace-nowrap">
           <div className="flex items-center gap-6">
             
@@ -79,15 +79,15 @@ export default function Home() {
               <span className="text-sm font-bold text-gray-500">設備:</span>
               <div className="flex gap-2">
                 <label className="cursor-pointer label border border-gray-300 rounded-lg px-3 py-1 hover:bg-base-200 transition bg-white">
-                  <span className="label-text font-medium mr-2">♿ 車椅子</span>
+                  <span className="label-text font-medium mr-2 text-gray-700">♿ 車椅子</span>
                   <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.wheelchair} onChange={() => handleCheckboxChange('wheelchair')} />
                 </label>
                 <label className="cursor-pointer label border border-gray-300 rounded-lg px-3 py-1 hover:bg-base-200 transition bg-white">
-                  <span className="label-text font-medium mr-2">👶 おむつ</span>
+                  <span className="label-text font-medium mr-2 text-gray-700">👶 おむつ</span>
                   <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.diaper} onChange={() => handleCheckboxChange('diaper')} />
                 </label>
                 <label className="cursor-pointer label border border-gray-300 rounded-lg px-3 py-1 hover:bg-base-200 transition bg-white">
-                  <span className="label-text font-medium mr-2">✚ オストメイト</span>
+                  <span className="label-text font-medium mr-2 text-gray-700">✚ オストメイト</span>
                   <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.ostomate} onChange={() => handleCheckboxChange('ostomate')} />
                 </label>
               </div>
@@ -95,13 +95,13 @@ export default function Home() {
 
             <div className="divider divider-horizontal mx-0"></div>
 
-            {/* 場所フィルター */}
+            {/* 場所フィルター (ラベル色を明示的に指定) */}
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-500">場所:</span>
               <div className="join border border-gray-300 bg-white">
-                <input className="join-item btn btn-sm px-3" type="radio" name="gate" aria-label="全て" checked={filters.inside_gate === null} onChange={() => handleGateFilterChange(null)} />
-                <input className="join-item btn btn-sm px-3" type="radio" name="gate" aria-label="改札内" checked={filters.inside_gate === true} onChange={() => handleGateFilterChange(true)} />
-                <input className="join-item btn btn-sm px-3" type="radio" name="gate" aria-label="改札外" checked={filters.inside_gate === false} onChange={() => handleGateFilterChange(false)} />
+                <input className="join-item btn btn-sm px-3 text-gray-700" type="radio" name="gate" aria-label="全て" checked={filters.inside_gate === null} onChange={() => handleGateFilterChange(null)} />
+                <input className="join-item btn btn-sm px-3 text-gray-700" type="radio" name="gate" aria-label="改札内" checked={filters.inside_gate === true} onChange={() => handleGateFilterChange(true)} />
+                <input className="join-item btn btn-sm px-3 text-gray-700" type="radio" name="gate" aria-label="改札外" checked={filters.inside_gate === false} onChange={() => handleGateFilterChange(false)} />
               </div>
             </div>
 
