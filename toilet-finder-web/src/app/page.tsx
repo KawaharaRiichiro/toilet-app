@@ -95,13 +95,31 @@ export default function Home() {
 
             <div className="divider divider-horizontal mx-0"></div>
 
-            {/* 場所フィルター (ラベル色を明示的に指定) */}
+            {/* 場所フィルター (スタイルを全面的に見直し) */}
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-500">場所:</span>
-              <div className="join border border-gray-300 bg-white">
-                <input className="join-item btn btn-sm px-3 text-gray-700" type="radio" name="gate" aria-label="全て" checked={filters.inside_gate === null} onChange={() => handleGateFilterChange(null)} />
-                <input className="join-item btn btn-sm px-3 text-gray-700" type="radio" name="gate" aria-label="改札内" checked={filters.inside_gate === true} onChange={() => handleGateFilterChange(true)} />
-                <input className="join-item btn btn-sm px-3 text-gray-700" type="radio" name="gate" aria-label="改札外" checked={filters.inside_gate === false} onChange={() => handleGateFilterChange(false)} />
+              <div className="join border border-gray-300 bg-white rounded-lg overflow-hidden">
+                {/* 全て */}
+                <button 
+                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === null ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  onClick={() => handleGateFilterChange(null)}
+                >
+                  全て
+                </button>
+                {/* 改札内 */}
+                <button 
+                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === true ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  onClick={() => handleGateFilterChange(true)}
+                >
+                  改札内
+                </button>
+                {/* 改札外 */}
+                <button 
+                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === false ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  onClick={() => handleGateFilterChange(false)}
+                >
+                  改札外
+                </button>
               </div>
             </div>
 
