@@ -88,35 +88,81 @@ export default function InTrainSearch() {
         <span className="text-2xl">🚃</span> 乗車中から検索
       </h2>
       
-      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-3xl">
-        <div className="form-control w-full sm:w-48">
-          <label className="label-text font-bold text-gray-600 mb-1 ml-1">路線</label>
-          <select className="select select-bordered w-full" value={line} onChange={(e) => setLine(e.target.value)} disabled={lineList.length === 0}>
+      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4">
+        
+        <div className="form-control w-full sm:w-auto min-w-[140px] flex-1">
+          <label className="label">
+            <span className="label-text font-bold text-gray-600">路線</span>
+          </label>
+          <select 
+            className="select select-bordered w-full"
+            value={line}
+            onChange={(e) => setLine(e.target.value)}
+            disabled={lineList.length === 0}
+          >
             {lineList.length === 0 && <option>読み込み中...</option>}
             {lineList.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
-        <div className="form-control w-full sm:w-48">
-          <label className="label-text font-bold text-gray-600 mb-1 ml-1">駅</label>
-          <select className="select select-bordered w-full" value={station} onChange={(e) => setStation(e.target.value)} disabled={isStationLoading || stationList.length === 0}>
-            {isStationLoading ? <option>駅を読込中...</option> : stationList.length === 0 ? <option>駅なし</option> : stationList.map(s => <option key={s} value={s}>{s}</option>)}
+
+        <div className="form-control w-full sm:w-auto min-w-[140px] flex-1">
+          <label className="label">
+            <span className="label-text font-bold text-gray-600">駅</span>
+          </label>
+          <select 
+            className="select select-bordered w-full"
+            value={station}
+            onChange={(e) => setStation(e.target.value)}
+            disabled={isStationLoading || stationList.length === 0}
+          >
+            {isStationLoading ? (
+              <option>駅を読込中...</option>
+            ) : stationList.length === 0 ? (
+              <option>駅なし</option>
+            ) : (
+              stationList.map(s => <option key={s} value={s}>{s}</option>)
+            )}
           </select>
         </div>
+
         <div className="form-control w-24">
-          <label className="label-text font-bold text-gray-600 mb-1 ml-1">号車</label>
-          <div className="join">
-            <input type="number" value={car} min="1" max="15" onChange={(e) => setCar(e.target.value)} className="input input-bordered join-item w-full text-center" required />
-            <span className="btn btn-disabled join-item bg-base-200 border-base-300 text-gray-500 px-2">号車</span>
+          <label className="label">
+            <span className="label-text font-bold text-gray-600">号車</span>
+          </label>
+          <div className="flex items-center">
+            <input 
+              type="number" 
+              value={car}
+              min="1"
+              max="15"
+              onChange={(e) => setCar(e.target.value)}
+              className="input input-bordered w-full text-center pr-8" 
+              required 
+            />
+            <span className="-ml-8 text-gray-500 z-10 pointer-events-none">号車</span>
           </div>
         </div>
-        <button type="submit" className="btn btn-primary px-8" disabled={isLoading || !line || !station}>
-          {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
-        </button>
+
+        <div className="form-control">
+          {/* ラベル分のスペースを空けるためのダミー */}
+          <label className="label invisible">
+            <span className="label-text">検索</span>
+          </label>
+          <button 
+            type="submit" 
+            className="btn btn-primary px-8 text-white font-bold" 
+            disabled={isLoading || !line || !station}
+          >
+            {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
+          </button>
+        </div>
+
       </form>
 
       {error && (
         <div className="mt-5 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-3">
-          <span className="text-xl">🚨</span><span>{error}</span>
+          <span className="text-xl">🚨</span>
+          <span>{error}</span>
         </div>
       )}
 
@@ -125,26 +171,28 @@ export default function InTrainSearch() {
           <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-lg">
             <span>🎯</span> このドアから一番便利なトイレ
           </h3>
-          <div className="text-xl font-extrabold text-gray-900 ml-1">{result.name}</div>
+          <div className="text-xl font-extrabold text-gray-900 ml-1">
+             {result.name}
+          </div>
           <p className="text-sm text-gray-600 mt-1 ml-1 flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
             {result.address}
           </p>
+           
            <div className="mt-4 flex gap-2 flex-wrap">
               <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>♿ 車椅子</span>
               <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>👶 おむつ</span>
               <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"} gap-1 pl-1.5`}>✚ オストメイト</span>
            </div>
            
-           {/* ★修正: ルート案内ボタン (左寄せ統一・レスポンシブ対応) */}
            <a 
             href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
             target="_blank" 
             rel="noopener noreferrer" 
-            className="mt-5 btn btn-primary w-full sm:w-auto text-white no-underline flex items-center justify-center sm:justify-start gap-2 px-6"
+            className="mt-5 btn btn-primary w-full sm:w-auto text-white no-underline flex items-center justify-center sm:justify-start gap-2 px-6 font-bold"
           >
             <span className="text-xl">🗺️</span>
-            <span className="font-bold">ルート案内</span>
+            <span>ルート案内</span>
           </a>
         </div>
       )}
