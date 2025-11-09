@@ -95,27 +95,30 @@ export default function Home() {
 
             <div className="divider divider-horizontal mx-0"></div>
 
-            {/* 場所フィルター (選択中のテキスト色を !text-white で強制) */}
+            {/* 場所フィルター (インラインスタイルで文字色を強制) */}
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-500">場所:</span>
               <div className="join border border-gray-300 bg-white rounded-lg overflow-hidden">
                 {/* 全て */}
                 <button 
-                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === null ? 'bg-primary !text-white border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === null ? 'bg-primary border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  style={filters.inside_gate === null ? { color: 'white' } : {}}
                   onClick={() => handleGateFilterChange(null)}
                 >
                   全て
                 </button>
                 {/* 改札内 */}
                 <button 
-                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === true ? 'bg-primary !text-white border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === true ? 'bg-primary border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  style={filters.inside_gate === true ? { color: 'white' } : {}}
                   onClick={() => handleGateFilterChange(true)}
                 >
                   改札内
                 </button>
                 {/* 改札外 */}
                 <button 
-                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === false ? 'bg-primary !text-white border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === false ? 'bg-primary border-primary' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                  style={filters.inside_gate === false ? { color: 'white' } : {}}
                   onClick={() => handleGateFilterChange(false)}
                 >
                   改札外
