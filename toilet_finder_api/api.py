@@ -6,172 +6,164 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-# .envファイルから環境変数を読み込む
+# 環境変数の読み込み
 load_dotenv()
-
-# Supabaseの接続情報
+# .env.local ではなく .env を読み込む場合があるため、両方チェックするか、環境変数設定に従う
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-TABLE_NAME = 'toilets'
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY") # ここは管理者権限(service_role)でもOK、またはanonキー
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise EnvironmentError("SUPABASE_URL or SUPABASE_KEY environment variables not set.")
+    print("Warning: SUPABASE_URL or SUPABASE_KEY not found in env.")
 
-# Supabaseクライアントの初期化
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
-# -----------------------------------------------------------------
-# CORS設定
-# -----------------------------------------------------------------
-# 許可するオリジン（フロントエンドのURL）を設定
+# CORS設定（フロントエンドからのアクセスを許可）
 origins = [
-    "http://localhost:3000",              # ローカル開発用
-    "https://toilet-app-tau.vercel.app",  # 本番環境用（末尾の / は無し）
+    "http://localhost:3000",
+    "https://toilet-finder-web.vercel.app", # あなたのVercelのURLに書き換えてください
+    # 他に許可するURLがあれば追加
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"], # 開発中は "*" で全許可推奨（本番時はoriginsに切り替え）
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -----------------------------------------------------------------
-# Pydanticモデル
-# -----------------------------------------------------------------
+# --- レスポンスの型定義 (Pydantic) ---
 class Toilet(BaseModel):
     id: str
-    created_at: str
     name: str
     address: Optional[str] = None
     latitude: float
     longitude: float
     opening_hours: Optional[str] = None
     availability_notes: Optional[str] = None
-    is_wheelchair_accessible: Optional[bool] = False
-    has_diaper_changing_station: Optional[bool] = False
-    is_ostomate_accessible: Optional[bool] = False
-    is_station_toilet: Optional[bool] = False
+    is_wheelchair_accessible: bool
+    has_diaper_changing_station: bool
+    is_ostomate_accessible: bool
+    is_station_toilet: bool
     inside_gate: Optional[bool] = None
+    
+class StationMetadata(BaseModel):
+    name: str
 
-class NearestToiletResponse(Toilet):
-    distance_meters: float
-
-# -----------------------------------------------------------------
-# APIエンドポイント
-# -----------------------------------------------------------------
+# --- エンドポイント定義 ---
 
 @app.get("/")
-async def root():
-    return {"message": "Toilet Finder API is running!"}
+def read_root():
+    return {"message": "Tokyo Toilet Finder API is running!"}
 
+# 1. 地図用：全トイレ取得 (フィルタリング付き)
 @app.get("/api/toilets", response_model=List[Toilet])
 async def get_toilets(
-    wheelchair: bool = Query(False, description="車椅子対応のみ"),
-    diaper: bool = Query(False, description="おむつ交換台ありのみ"),
-    ostomate: bool = Query(False, description="オストメイト対応のみ"),
-    inside_gate_filter: Optional[str] = Query(None, description="改札内フィルター (true/false)")
+    limit: int = 5000,
+    wheelchair: bool = False,
+    diaper: bool = False,
+    ostomate: bool = False,
+    inside_gate: Optional[bool] = None
 ):
-    try:
-        query = supabase.table(TABLE_NAME).select("*")
-        if wheelchair:
-            query = query.eq('is_wheelchair_accessible', True)
-        if diaper:
-            query = query.eq('has_diaper_changing_station', True)
-        if ostomate:
-            query = query.eq('is_ostomate_accessible', True)
-        if inside_gate_filter is not None:
-            is_inside = inside_gate_filter.lower() == 'true'
-            query = query.eq("is_station_toilet", True)
-            query = query.eq("inside_gate", is_inside)
-        response = query.execute()
-        return response.data
-    except Exception as e:
-        print(f"Error fetching toilets: {e}")
-        raise HTTPException(status_code=500, detail="データベースからのデータ取得中にエラーが発生しました")
+    query = supabase.table("toilets").select("*")
 
-@app.get("/api/nearest", response_model=NearestToiletResponse) 
-async def get_nearest_toilet(
-    lat: float = Query(..., description="緯度"),
-    lon: float = Query(..., description="経度")
+    # フィルタリング
+    if wheelchair:
+        query = query.eq("is_wheelchair_accessible", True)
+    if diaper:
+        query = query.eq("has_diaper_changing_station", True)
+    if ostomate:
+        query = query.eq("is_ostomate_accessible", True)
+    if inside_gate is not None:
+        query = query.eq("inside_gate", inside_gate)
+
+    # 全件取得（limit指定）
+    response = query.limit(limit).execute()
+    return response.data
+
+# 2. 現在地用：最寄りトイレ検索 (RPC使用)
+@app.get("/api/nearest", response_model=List[Toilet])
+async def get_nearest_toilets(
+    lat: float,
+    lng: float,
+    limit: int = 20
 ):
-    try:
-        response = supabase.rpc(
-            'find_nearest_toilet',
-            {'user_lat': lat, 'user_lon': lon}
-        ).execute()
-        if response.data and len(response.data) > 0:
-            return response.data[0]
-        else:
-             raise HTTPException(status_code=404, detail="近くにトイレが見つかりませんでした")
-    except Exception as e:
-        print(f"Error fetching nearest toilet: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # PostGISを使ったRPC呼び出し
+    response = supabase.rpc('nearby_toilets', {
+        'lat': lat,
+        'long': lng
+    }).execute()
+    
+    # 必要ならここでPython側でさらにフィルタリングも可能
+    # data = response.data[:limit]
+    return response.data
 
-# --- 以下、乗車中検索用エンドポイント ---
+# 3. 電車検索用：路線リスト取得
+@app.get("/api/train/lines", response_model=List[str])
+async def get_lines():
+    # ユニークな路線名を取得したいが、Supabase JSのような .distinct() がPython版にはない場合があるため
+    # 一旦全件取ってPythonで集合にするか、RPCを作るのが良い。
+    # ここでは簡易的に全件取得してPythonで処理（データ量が増えると遅くなるので注意）
+    response = supabase.table("station_platform_doors").select("line_name").execute()
+    
+    # 重複排除
+    lines = sorted(list(set(item['line_name'] for item in response.data)))
+    return lines
 
-@app.get("/api/lines", response_model=List[str])
-async def get_all_line_names():
-    """ 全ての路線名リストを取得 """
-    try:
-        response = supabase.table('station_platform_doors').select('line_name').execute()
-        line_set = set(item['line_name'] for item in response.data if item.get('line_name'))
-        return sorted(list(line_set))
-    except Exception as e:
-        print(f"Error fetching all line names: {e}")
-        raise HTTPException(status_code=500, detail="路線名リストの取得に失敗しました")
+# 4. 電車検索用：駅リスト取得
+@app.get("/api/train/stations", response_model=List[str])
+async def get_stations(line: str):
+    response = supabase.table("station_platform_doors")\
+        .select("station_name")\
+        .eq("line_name", line)\
+        .execute()
+    
+    stations = sorted(list(set(item['station_name'] for item in response.data)))
+    return stations
 
-@app.get("/api/stations-by-line", response_model=List[str])
-async def get_stations_by_line(line: str = Query(..., description="路線名")):
-    """ 指定された路線の駅名リストを取得 """
-    try:
-        response = supabase.table('station_platform_doors').select('station_name').eq('line_name', line).execute()
-        station_set = set(item['station_name'] for item in response.data if item.get('station_name'))
-        return sorted(list(station_set))
-    except Exception as e:
-        print(f"Error fetching stations for line {line}: {e}")
-        raise HTTPException(status_code=500, detail="駅名リストの取得に失敗しました")
+# 5. 電車検索用：方面リスト取得
+@app.get("/api/train/directions", response_model=List[str])
+async def get_directions(line: str, station: str):
+    response = supabase.table("station_platform_doors")\
+        .select("direction")\
+        .eq("line_name", line)\
+        .eq("station_name", station)\
+        .execute()
+    
+    directions = sorted(list(set(item['direction'] for item in response.data if item['direction'])))
+    return directions
 
-# 修正箇所のインポート部分（変更なし、確認用）
-# ...
-
-## toilet_finder_api/api.py の get_train_toilet 部分
-
-@app.get("/api/train-toilet", response_model=Toilet) # ← レスポンス型を Toilet (距離なし) に変更
-async def get_train_toilet(
-    station: str = Query(..., description="駅名"),
-    line: str = Query(..., description="路線名"),
-    car: int = Query(..., description="号車番号")
+# 6. 電車検索用：トイレ特定
+@app.get("/api/train/search", response_model=Toilet)
+async def search_train_toilet(
+    line: str,
+    station: str,
+    car: int,
+    direction: Optional[str] = None
 ):
-    """
-    指定された駅・路線・号車のドアに紐付けられた、最適なトイレを返す
-    """
-    try:
-        # 1. ドアデータから nearest_toilet_id を取得
-        door_response = supabase.table('station_platform_doors').select(
-            'nearest_toilet_id'
-        ).eq('station_name', station).eq('line_name', line).eq('car_number', car).maybe_single().execute()
-
-        # データがない、または紐付けがない場合
-        if not door_response.data or not door_response.data.get('nearest_toilet_id'):
-             print(f"Toilet not linked for: {station}, {line}, Car {car}")
-             raise HTTPException(status_code=404, detail="この場所から最適なトイレの情報がまだ登録されていません")
+    # ドアを特定
+    query = supabase.table("station_platform_doors")\
+        .select("nearest_toilet_id")\
+        .eq("line_name", line)\
+        .eq("station_name", station)\
+        .eq("car_number", car)
+    
+    if direction:
+        query = query.eq("direction", direction)
         
-        toilet_id = door_response.data['nearest_toilet_id']
-
-        # 2. トイレIDを使ってトイレ情報を取得
-        toilet_response = supabase.table('toilets').select("*").eq('id', toilet_id).maybe_single().execute()
-
-        if not toilet_response.data:
-            raise HTTPException(status_code=404, detail="指定されたトイレの情報が見つかりませんでした")
-
-        return toilet_response.data
-
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        print(f"Error fetching train toilet: {e}")
-        raise HTTPException(status_code=500, detail=f"検索中にエラーが発生しました: {str(e)}")
+    door_res = query.maybe_single().execute()
+    
+    if not door_res.data:
+        raise HTTPException(status_code=404, detail="Door data not found")
+    
+    toilet_id = door_res.data['nearest_toilet_id']
+    
+    # トイレ情報を取得
+    toilet_res = supabase.table("toilets").select("*").eq("id", toilet_id).single().execute()
+    
+    if not toilet_res.data:
+        raise HTTPException(status_code=404, detail="Toilet data not found")
+        
+    return toilet_res.data

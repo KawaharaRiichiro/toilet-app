@@ -4,6 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 
+// コンポーネントの動的インポート
 const NearestToilet = dynamic(() => import('@/components/NearestToilet'), { 
   ssr: false,
   loading: () => <div className="w-full h-full flex items-center justify-center text-gray-500">地図読み込み中...</div>
@@ -28,6 +29,7 @@ type ToiletData = {
   distance?: number;
 };
 
+// 距離フォーマット
 const formatDistance = (meters?: number) => {
   if (!meters) return '';
   if (meters < 1000) return `${Math.round(meters)}m`;
@@ -62,7 +64,9 @@ export default function Home() {
           <span className="text-xl font-bold px-4">🚽 トイレ探索アプリ　すぐそこトイレ</span>
         </div>
         <div className="flex-none">
-           <Link href="/login" className="btn btn-ghost btn-sm text-white">管理者</Link>
+           <Link href="/login" className="btn btn-ghost btn-sm text-white">
+             管理者
+           </Link>
         </div>
       </header>
 
@@ -71,43 +75,28 @@ export default function Home() {
         
         {/* タブ切り替え */}
         <div className="p-3 bg-base-200">
-          <div role="tablist" className="tabs tabs-boxed bg-gray-300 p-1">
-            {/* 現在地タブ */}
-            <a 
+          <div role="tablist" className="tabs tabs-boxed grid grid-cols-3 gap-2">
+            <button 
               role="tab" 
-              className={`tab flex-1 transition-all duration-200 font-bold text-base ${
-                activeTab === 'current' 
-                  ? 'tab-active bg-white text-primary shadow-sm' // 選択時：白背景・青文字
-                  : 'text-gray-600 hover:text-gray-800'          // 非選択時：グレー文字
-              }`}
+              className={`tab font-bold transition-all duration-200 ${activeTab === 'current' ? 'tab-active bg-primary text-primary-content shadow' : 'bg-base-100'}`}
               onClick={() => setActiveTab('current')}
             >
               📍 現在地から
-            </a>
-            {/* 乗車中タブ */}
-            <a 
+            </button>
+            <button 
               role="tab" 
-              className={`tab flex-1 transition-all duration-200 font-bold text-base ${
-                activeTab === 'train' 
-                  ? 'tab-active bg-white text-primary shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
+              className={`tab font-bold transition-all duration-200 ${activeTab === 'train' ? 'tab-active bg-primary text-primary-content shadow' : 'bg-base-100'}`}
               onClick={() => setActiveTab('train')}
             >
               🚃 乗車中から
-            </a>
-            {/* 地図タブ */}
-            <a 
+            </button>
+            <button 
               role="tab" 
-              className={`tab flex-1 transition-all duration-200 font-bold text-base ${
-                activeTab === 'map' 
-                  ? 'tab-active bg-white text-primary shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
+              className={`tab font-bold transition-all duration-200 ${activeTab === 'map' ? 'tab-active bg-primary text-primary-content shadow' : 'bg-base-100'}`}
               onClick={() => setActiveTab('map')}
             >
               🗺️ 地図から
-            </a>
+            </button>
           </div>
         </div>
 
@@ -149,6 +138,8 @@ export default function Home() {
         {activeTab !== 'train' && (
           <div className="bg-base-100 p-3 overflow-x-auto whitespace-nowrap border-b border-base-200">
              <div className="flex items-center gap-6">
+               
+               {/* 設備フィルター */}
                <div className="flex items-center gap-2">
                  <span className="text-sm font-bold text-gray-500">設備:</span>
                  <div className="flex gap-2">
@@ -166,6 +157,8 @@ export default function Home() {
                    </label>
                  </div>
                </div>
+
+               {/* 場所フィルター */}
                <div className="flex items-center gap-2 border-l pl-4">
                  <span className="text-sm font-bold text-gray-500">場所:</span>
                  <div className="join">

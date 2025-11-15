@@ -40,17 +40,19 @@ def get_station_data_from_csv():
             st_name = str(row.get('station_name', '不明な駅'))
             line = str(row.get('line_name', ''))
             notes = str(row.get('notes', ''))
-            
-            display_name = st_name
+            display_name = str(row.get('name', st_name))
             address = f"{line} {st_name}" if line else st_name
 
-            # 【重要】IDを固定化するロジック (UUID v5)
-            # "駅名_表示名" という文字列が同じなら、常に同じIDが生成されます
-            unique_string = f"{st_name}_{display_name}_{address}"
-            fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
+            # 【重要修正】CSVに 'id' があればそれを使い、なければ計算する
+            # これで regenerate_doors_final.py との不整合がなくなります
+            if 'id' in row and pd.notna(row['id']):
+                fixed_id = str(row['id'])
+            else:
+                unique_string = f"{st_name}_{display_name}_{address}"
+                fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
 
             data = {
-                "id": fixed_id, # 固定IDを使用
+                "id": fixed_id,
                 "name": display_name,
                 "address": address,
                 "latitude": float(row['lat']),
@@ -77,7 +79,3 @@ def get_station_data_from_csv():
     except Exception as e:
         print(f"  [Error] 駅データ読み込み中にエラーが発生しました: {e}")
         return []
-
-if __name__ == "__main__":
-    data = get_station_data_from_csv()
-    print(f"取得件数: {len(data)}")
