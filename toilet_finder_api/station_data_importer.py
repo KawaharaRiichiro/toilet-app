@@ -1,71 +1,83 @@
 import pandas as pd
-import time
 import uuid
-from typing import List, Dict, Any
+import time
+import os
 
-# ファイル名を定義
+# CSVファイル名
 STATION_CSV_FILE = "station_toilet.csv"
 
-def get_station_data_from_csv() -> List[Dict[str, Any]]:
+def get_station_data_from_csv():
+    """
+    station_toilet.csv を読み込み、Supabase登録用の形式に変換して返す
+    """
+    if not os.path.exists(STATION_CSV_FILE):
+        print(f"  [Warning] {STATION_CSV_FILE} が見つかりません。駅データはスキップします。")
+        return []
+
     print(f"駅トイレデータCSV ({STATION_CSV_FILE}) を読み込みます...")
-    processed_list = []
-
+    
     try:
-        try:
-            df = pd.read_csv(STATION_CSV_FILE, encoding='utf-8')
-        except UnicodeDecodeError:
-            df = pd.read_csv(STATION_CSV_FILE, encoding='cp932')
+        df = pd.read_csv(STATION_CSV_FILE, encoding='utf-8')
+        
+        if 'lat' not in df.columns or 'lon' not in df.columns:
+            print("  [Error] CSVに 'lat' または 'lon' 列がありません。")
+            return []
 
+        processed_data = []
+        
         for _, row in df.iterrows():
-            # ★修正: 英語('name') と 日本語('名称') の両方に対応
-            name = row.get('name') or row.get('名称')
-            if pd.isna(name): continue
+            if pd.isna(row.get('lat')) or pd.isna(row.get('lon')):
+                continue
 
-            # IDの取得
-            toilet_id = str(row.get('id')).strip() if pd.notna(row.get('id')) else str(uuid.uuid4())
+            def is_avail(val):
+                if pd.isna(val): return False
+                return str(val).strip() in ['○', '有', 'あり', 'TRUE', 'True', 'true', 'yes']
 
-            try:
-                # 座標の取得 ("latitude,longitude" という結合カラムにも対応)
-                lat_lon_val = row.get('latitude,longitude') or row.get('座標')
-                if pd.notna(lat_lon_val) and ',' in str(lat_lon_val):
-                    lat_str, lon_str = str(lat_lon_val).split(',')
-                    lat = float(lat_str.strip('" '))
-                    lon = float(lon_str.strip('" '))
-                else:
-                    lat = float(row.get('latitude') or row.get('緯度'))
-                    lon = float(row.get('longitude') or row.get('経度'))
-            except (ValueError, TypeError):
-                 print(f"警告: {name} の座標が無効です。スキップします。")
-                 continue
+            wheelchair = is_avail(row.get('wheelchair'))
+            baby = is_avail(row.get('baby_chair'))
+            ostomate = is_avail(row.get('ostomate'))
 
-            def to_bool(val):
-                return str(val).strip().upper() in ['TRUE', 'YES', '1', 'あり', '○']
-
-            current_time = time.strftime('%Y-%m-%dT%H:%M:%SZ')
-
-            processed_list.append({
-                'id': toilet_id,
-                'name': name,
-                'address': row.get('address') or row.get('住所') or f"{row.get('station_name') or row.get('駅名')} 構内",
-                'latitude': lat,
-                'longitude': lon,
-                'is_wheelchair_accessible': to_bool(row.get('is_wheelchair_accessible') or row.get('車椅子')),
-                'has_diaper_changing_station': False,
-                'is_ostomate_accessible': False,
-                'is_station_toilet': True,
-                'inside_gate': to_bool(row.get('inside_gate') or row.get('改札内')),
-                'opening_hours': None,
-                'availability_notes': None,
-                'created_at': current_time,
-                'updated_at': current_time,
-            })
+            st_name = str(row.get('station_name', '不明な駅'))
+            line = str(row.get('line_name', ''))
+            notes = str(row.get('notes', ''))
             
-        print(f"駅トイレデータCSVから {len(processed_list)} 件のデータを取得・加工しました。")
-        return processed_list
+            display_name = st_name
+            address = f"{line} {st_name}" if line else st_name
 
-    except FileNotFoundError:
-        print(f"エラー: {STATION_CSV_FILE} が見つかりません。")
-        return []
+            # 【重要】IDを固定化するロジック (UUID v5)
+            # "駅名_表示名" という文字列が同じなら、常に同じIDが生成されます
+            unique_string = f"{st_name}_{display_name}_{address}"
+            fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
+
+            data = {
+                "id": fixed_id, # 固定IDを使用
+                "name": display_name,
+                "address": address,
+                "latitude": float(row['lat']),
+                "longitude": float(row['lon']),
+                "opening_hours": row.get('opening_hours', '始発〜終電'),
+                "availability_notes": notes,
+                "is_wheelchair_accessible": wheelchair,
+                "has_diaper_changing_station": baby,
+                "is_ostomate_accessible": ostomate,
+                "is_station_toilet": True,
+                "station_name": st_name,
+                "inside_gate": "改札内" in notes,
+                "created_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "updated_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "average_rating": 0.0,
+                "review_count": 0,
+                "last_synced_at": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
+            processed_data.append(data)
+
+        print(f"駅トイレデータCSVから {len(processed_data)} 件のデータを取得・加工しました。")
+        return processed_data
+
     except Exception as e:
-        print(f"駅トイレデータの読み込みエラー: {e}")
+        print(f"  [Error] 駅データ読み込み中にエラーが発生しました: {e}")
         return []
+
+if __name__ == "__main__":
+    data = get_station_data_from_csv()
+    print(f"取得件数: {len(data)}")
