@@ -1,130 +1,156 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-const formatDistance = (meters) => {
-  if (typeof meters !== 'number' || isNaN(meters)) return '';
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
+const libraries = ['places', 'geometry'];
+
+// 距離計算ロジック
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371e3; 
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 };
 
-export default function NearestToilet() {
-  const [nearestToilet, setNearestToilet] = useState(null);
-  const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+export default function NearestToilet({ filters, onUpdateNearest }) {
+  const [toilets, setToilets] = useState([]);
+  const [selectedToilet, setSelectedToilet] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  
+  const mapRef = useRef(null);
+  const supabase = createClientComponentClient();
 
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+    libraries,
+  });
+
+  // ★重要修正: centerオブジェクトをメモ化して固定する
+  // これにより、再レンダリング時に地図が初期位置に戻るのを防ぎます
+  const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
+
+  // 1. 現在地取得
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setError('お使いの端末は位置情報取得に対応していません。');
-      setIsLoading(false);
-      return;
-    }
-
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const response = await fetch(`${API_BASE_URL}/api/nearest?lat=${latitude}&lon=${longitude}`);
-          
-          if (response.status === 404) {
-             setError("この周辺にトイレが見つかりませんでした。");
-             setNearestToilet(null);
-             return;
+      (position) => {
+        const pos = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setUserLocation(pos);
+        // 地図がロード済みなら移動
+        if (mapRef.current) mapRef.current.panTo(pos);
+      },
+      (err) => console.error(err)
+    );
+  }, []);
+
+  // 2. データ取得
+  useEffect(() => {
+    async function fetchToilets() {
+      if (!userLocation) return;
+      
+      try {
+        const { data, error } = await supabase
+          .rpc('nearby_toilets', { 
+            lat: userLocation.lat, 
+            long: userLocation.lng 
+          });
+
+        if (!error && data) {
+          const filtered = data.filter(t => {
+            if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
+            if (filters?.diaper && !t.has_diaper_changing_station) return false;
+            if (filters?.ostomate && !t.is_ostomate_accessible) return false;
+            if (filters?.inside_gate !== null && filters?.inside_gate !== undefined) {
+               if (t.inside_gate !== filters.inside_gate) return false;
+            }
+            return true;
+          });
+
+          const withDistance = filtered.map(t => ({
+            ...t,
+            distance: calculateDistance(userLocation.lat, userLocation.lng, t.latitude, t.longitude)
+          }));
+
+          setToilets(withDistance);
+
+          if (onUpdateNearest) {
+            onUpdateNearest(withDistance.length > 0 ? withDistance[0] : null);
           }
-          if (!response.ok) throw new Error(`APIエラー: ${response.status}`);
-          const data = await response.json();
-          setNearestToilet(data);
-        } catch (apiError) {
-          console.error("API呼び出しエラー:", apiError);
-          setError('サーバーからトイレ情報を取得できませんでした。');
-        } finally {
-          setIsLoading(false);
         }
-      },
-      (geoError) => {
-        setIsLoading(false);
-        if (geoError.code === geoError.PERMISSION_DENIED) {
-          setError('現在地の取得が拒否されました。設定を許可してください。');
-        } else {
-          setError('現在地の取得に失敗しました。');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 5000 }
-    );
-  }, []); 
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchToilets();
+  }, [userLocation, filters, supabase, onUpdateNearest]);
 
-  if (isLoading) {
-    return (
-      <div className="p-8 text-center flex flex-col items-center justify-center gap-3 text-gray-500">
-        <span className="loading loading-spinner loading-lg text-primary"></span>
-        <p className="font-bold animate-pulse">現在地から最寄りのトイレを検索中...</p>
-      </div>
-    );
-  }
+  if (!isLoaded) return <div className="p-4 text-center">地図読み込み中...</div>;
 
-  if (error) {
-    return (
-      <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-3">
-        <span className="text-2xl">🚨</span>
-        <div>
-            <h2 className="text-lg font-bold">検索エラー</h2>
-            <p className="font-medium">{error}</p>
-            <p className="text-xs mt-1 opacity-80">（場所を変えて再度アクセスするか、地図から探してください）</p>
-        </div>
-      </div>
-    );
-  }
+  return (
+    <div className="h-full w-full relative">
+       <GoogleMap
+          zoom={16}
+          center={defaultCenter} // メモ化した固定値を渡す
+          mapContainerStyle={{ width: '100%', height: '100%' }}
+          options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+          onLoad={map => {
+            mapRef.current = map;
+            if(userLocation) map.panTo(userLocation);
+          }}
+        >
+          {userLocation && (
+            <Marker
+              position={userLocation}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: "#4285F4",
+                fillOpacity: 1,
+                strokeColor: "white",
+                strokeWeight: 2,
+              }}
+            />
+          )}
+          
+          {toilets.map((toilet) => (
+            <Marker
+              key={toilet.id}
+              position={{ lat: toilet.latitude, lng: toilet.longitude }}
+              onClick={() => {
+                  setSelectedToilet(toilet);
+                  if (onUpdateNearest) onUpdateNearest(toilet);
+              }}
+              icon={{
+                  url: toilet.is_station_toilet 
+                  ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" 
+                  : "http://maps.google.com/mapfiles/ms/icons/red-dot.png" 
+              }}
+            />
+          ))}
 
-  if (nearestToilet) {
-    const distanceText = formatDistance(nearestToilet.distance_meters);
-    
-    return (
-      <div className="p-5 bg-white shadow-sm rounded-xl border border-yellow-200">
-        <h2 className="text-xl font-extrabold text-yellow-600 mb-4 flex items-center gap-2">
-          <span>🏃‍♂️</span> すぐそこ！最寄りのトイレ
-        </h2>
-        <div className="border-l-4 border-yellow-500 pl-4 py-1 bg-yellow-50 rounded-r-lg">
-          <div className="text-xl font-bold text-gray-900">
-            {nearestToilet.name} 
-            {distanceText && <span className="text-red-500 ml-2 text-base">({distanceText})</span>}
-          </div>
-          <p className="text-gray-600 text-sm mt-1">{nearestToilet.address}</p>
-        </div>
-        
-        <div className="mt-4 flex flex-wrap gap-2">
-             <span className={`badge ${nearestToilet.is_wheelchair_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
-                 ♿ 車椅子{nearestToilet.is_wheelchair_accessible ? 'OK' : 'NG'}
-             </span>
-             <span className={`badge ${nearestToilet.has_diaper_changing_station ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
-                 👶 おむつ{nearestToilet.has_diaper_changing_station ? 'OK' : 'NG'}
-             </span>
-             <span className={`badge ${nearestToilet.is_ostomate_accessible ? "badge-success text-white" : "badge-ghost text-gray-400"}`}>
-                 ✚ オストメイト{nearestToilet.is_ostomate_accessible ? 'OK' : 'NG'}
-             </span>
-        </div>
-        
-        <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-           {nearestToilet.opening_hours ? (
-             <p className="text-gray-600 text-sm flex items-center gap-1">
-               <span>🕘</span> 時間: {nearestToilet.opening_hours}
-             </p>
-           ) : <div></div>}
-           
-          {/* ルート案内ボタン: インラインスタイルで白文字を強制 */}
-          <a 
-            href={`https://www.google.com/maps/dir/?api=1&destination=${nearestToilet.latitude},${nearestToilet.longitude}`}
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="btn bg-blue-600 hover:bg-blue-700 text-white border-none no-underline flex items-center gap-2 px-6"
-            style={{ color: 'white !important', textDecoration: 'none' }}
-          >
-            <span className="text-xl">🗺️</span>
-            <span className="font-bold">ルート案内</span>
-          </a>
-        </div>
-      </div>
-    );
-  }
-  return null; 
+          {selectedToilet && (
+              <InfoWindow
+                  position={{ lat: selectedToilet.latitude, lng: selectedToilet.longitude }}
+                  onCloseClick={() => setSelectedToilet(null)}
+              >
+                  <div className="p-1 text-black min-w-[120px]">
+                      <strong>{selectedToilet.name}</strong>
+                  </div>
+              </InfoWindow>
+          )}
+       </GoogleMap>
+    </div>
+  );
 }

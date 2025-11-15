@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // 既存の設定（Reactの厳格モード）
-  reactStrictMode: true,
+  reactStrictMode: false,
   
   // ★★★ 新規追加：FastAPIへのプロキシ設定（リライティング）★★★
   async rewrites() {
