@@ -1,204 +1,245 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function InTrainSearch() {
-  const [station, setStation] = useState(''); 
+  // 検索条件
   const [line, setLine] = useState('');       
-  const [car, setCar] = useState('5');
-  const [stationList, setStationList] = useState([]);
+  const [station, setStation] = useState(''); 
+  const [direction, setDirection] = useState(''); // 方面
+  const [car, setCar] = useState('5'); // デフォルト5号車
+
   const [lineList, setLineList] = useState([]);
+  const [stationList, setStationList] = useState([]);
+  const [directionList, setDirectionList] = useState([]);
+
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isStationLoading, setIsStationLoading] = useState(false);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const supabase = createClientComponentClient();
 
+  // 1. 路線リスト取得
   useEffect(() => {
     const fetchLines = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/lines`);
-        if (!res.ok) throw new Error(`路線リスト取得エラー: ${res.status}`);
-        const data = await res.json();
-        setLineList(data);
-        if (data.length > 0) setLine(data[0]);
-      } catch (err) {
-        console.error("路線リストの取得に失敗", err);
-        setError("路線リストのAPI取得に失敗しました");
+      const { data, error } = await supabase
+        .from('station_platform_doors')
+        .select('line_name');
+      
+      if (!error && data) {
+        const uniqueLines = [...new Set(data.map(item => item.line_name))];
+        setLineList(uniqueLines);
+        if (uniqueLines.length > 0) setLine(uniqueLines[0]);
       }
     };
     fetchLines();
-  }, []);
+  }, [supabase]);
 
+  // 2. 駅リスト取得
   useEffect(() => {
-    if (!line) {
-        setStationList([]);
-        setStation('');
-        return;
-    }
+    if (!line) return;
+    const fetchStations = async () => {
+      const { data, error } = await supabase
+        .from('station_platform_doors')
+        .select('station_name')
+        .eq('line_name', line);
 
-    const fetchStationsByLine = async () => {
-      try {
-        setIsStationLoading(true);
-        const res = await fetch(`${API_BASE_URL}/api/stations-by-line?line=${encodeURIComponent(line)}`);
-        if (!res.ok) throw new Error(`駅リスト取得エラー: ${res.status}`);
-        const data = await res.json();
-        setStationList(data);
-        if (data.length > 0) setStation(data[0]); else setStation('');
-      } catch (err) {
-        console.error("駅リストの取得に失敗", err);
-        setError("駅リストのAPI取得に失敗しました");
-      } finally {
-        setIsStationLoading(false);
+      if (!error && data) {
+        const uniqueStations = [...new Set(data.map(item => item.station_name))];
+        setStationList(uniqueStations);
+        if (uniqueStations.length > 0) setStation(uniqueStations[0]);
+        else setStation('');
       }
     };
-    fetchStationsByLine();
-  }, [line]);
+    fetchStations();
+  }, [line, supabase]);
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
+  // 3. 方面リスト取得
+  useEffect(() => {
     if (!line || !station) {
-        setError("路線と駅を選択してください。");
-        return;
+      setDirectionList([]);
+      setDirection('');
+      return;
     }
+    const fetchDirections = async () => {
+      const { data, error } = await supabase
+        .from('station_platform_doors')
+        .select('direction')
+        .eq('line_name', line)
+        .eq('station_name', station);
+
+      if (!error && data) {
+        const uniqueDirs = [...new Set(data.map(item => item.direction).filter(d => d))];
+        setDirectionList(uniqueDirs);
+        if (uniqueDirs.length > 0) setDirection(uniqueDirs[0]);
+        else setDirection('');
+      }
+    };
+    fetchDirections();
+  }, [line, station, supabase]);
+
+  // 4. 検索実行
+  const handleSearch = async () => {
     setIsLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/train-toilet?station=${encodeURIComponent(station)}&line=${encodeURIComponent(line)}&car=${car}`);
-      if (!res.ok) {
-        if (res.status === 404) throw new Error("この場所から最適なトイレの情報がまだ登録されていません。");
-        throw new Error(`サーバーエラー: ${res.status}`);
+      // ドアデータを検索
+      let query = supabase
+        .from('station_platform_doors')
+        .select('nearest_toilet_id')
+        .eq('line_name', line)
+        .eq('station_name', station)
+        .eq('car_number', parseInt(car));
+      
+      if (direction) {
+        query = query.eq('direction', direction);
       }
-      const data = await res.json();
-      setResult(data);
+
+      const { data: doorData, error: doorError } = await query.maybeSingle();
+
+      if (doorError) throw doorError;
+      if (!doorData || !doorData.nearest_toilet_id) {
+        throw new Error("この場所の情報はまだ登録されていません");
+      }
+
+      // トイレ情報を取得
+      const { data: toiletData, error: toiletError } = await supabase
+        .from('toilets')
+        .select('*')
+        .eq('id', doorData.nearest_toilet_id)
+        .single();
+
+      if (toiletError) throw toiletError;
+      
+      setResult(toiletData);
+
     } catch (err) {
-      console.error("乗車中検索エラー:", err);
-      setError(err.message || "検索中にエラーが発生しました。");
+      console.error(err);
+      setError(err.message || "検索に失敗しました");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="bg-white p-5 rounded-xl shadow-sm border border-blue-100">
-      <h2 className="text-lg font-bold mb-4 text-blue-800 flex items-center gap-2">
-        <span className="text-2xl">🚃</span> 乗車中から検索
-      </h2>
+    <div className="p-4 w-full">
       
-      <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 max-w-4xl">
+      {/* 検索フォーム */}
+      <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-200">
         
-        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
-          <label className="label py-1">
-            <span className="label-text font-bold text-gray-600">路線</span>
-          </label>
-          <select 
-            className="select select-bordered w-full"
-            value={line}
-            onChange={(e) => setLine(e.target.value)}
-            disabled={lineList.length === 0}
-          >
-            {lineList.length === 0 && <option>読み込み中...</option>}
-            {lineList.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </div>
+        <div className="flex flex-col gap-3">
+          {/* 1行目：路線と駅 */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="form-control w-full">
+              <label className="label py-0 pb-1">
+                <span className="label-text text-xs font-bold text-gray-500">路線</span>
+              </label>
+              <select 
+                className="select select-bordered select-sm w-full font-bold text-gray-700" 
+                value={line} 
+                onChange={(e) => setLine(e.target.value)}
+              >
+                {lineList.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
 
-        <div className="form-control w-full sm:w-auto flex-1 min-w-[140px]">
-          <label className="label py-1">
-            <span className="label-text font-bold text-gray-600">駅</span>
-          </label>
-          <select 
-            className="select select-bordered w-full"
-            value={station}
-            onChange={(e) => setStation(e.target.value)}
-            disabled={isStationLoading || stationList.length === 0}
-          >
-            {isStationLoading ? (
-              <option>駅を読込中...</option>
-            ) : stationList.length === 0 ? (
-              <option>駅なし</option>
+            <div className="form-control w-full">
+              <label className="label py-0 pb-1">
+                <span className="label-text text-xs font-bold text-gray-500">駅</span>
+              </label>
+              <select 
+                className="select select-bordered select-sm w-full font-bold text-gray-700" 
+                value={station} 
+                onChange={(e) => setStation(e.target.value)}
+                disabled={!stationList.length}
+              >
+                {stationList.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* 2行目：方面と号車 */}
+          <div className="grid grid-cols-2 gap-2">
+            {/* 方面 */}
+            {directionList.length > 0 ? (
+              <div className="form-control w-full">
+                <label className="label py-0 pb-1">
+                  <span className="label-text text-xs font-bold text-gray-500">方面</span>
+                </label>
+                <select 
+                  className="select select-bordered select-sm w-full font-bold text-gray-700" 
+                  value={direction} 
+                  onChange={(e) => setDirection(e.target.value)}
+                >
+                  {directionList.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
             ) : (
-              stationList.map(s => <option key={s} value={s}>{s}</option>)
+              <div className="hidden"></div>
             )}
-          </select>
-        </div>
 
-        <div className="form-control w-24">
-          <label className="label py-1">
-            <span className="label-text font-bold text-gray-600">号車</span>
-          </label>
-          <div className="flex items-center relative">
-            <input 
-              type="number" 
-              value={car}
-              min="1"
-              max="15"
-              onChange={(e) => setCar(e.target.value)}
-              className="input input-bordered w-full pr-8 text-center" 
-              required 
-            />
-            <span className="absolute right-2 text-gray-500 pointer-events-none text-sm">号車</span>
+            <div className="form-control w-full">
+              <label className="label py-0 pb-1">
+                <span className="label-text text-xs font-bold text-gray-500">乗車位置</span>
+              </label>
+              <select 
+                className={`select select-bordered select-sm w-full font-bold text-gray-700`}
+                value={car} 
+                onChange={(e) => setCar(e.target.value)}
+              >
+                {[...Array(15)].map((_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}号車</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="form-control">
-           <button 
-            type="submit" 
-            className="btn bg-blue-600 hover:bg-blue-700 text-white border-none px-8 font-bold h-[3rem] min-h-[3rem]" 
-            style={{ color: 'white !important' }}
-            disabled={isLoading || !line || !station}
-          >
-            {isLoading ? <span className="loading loading-spinner"></span> : '検索'}
-          </button>
-        </div>
+        {/* ★修正: 青背景を強制指定して視認性を確保 */}
+        <button 
+          className="btn bg-blue-600 hover:bg-blue-700 text-white border-none btn-sm w-full font-bold mt-4 shadow-sm"
+          onClick={handleSearch}
+          disabled={isLoading || !line || !station}
+        >
+          {isLoading ? <span className="loading loading-spinner loading-xs"></span> : "トイレを探す"}
+        </button>
+      </div>
 
-      </form>
-
+      {/* エラー表示 */}
       {error && (
-        <div className="mt-5 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200 flex items-center gap-3">
-          <span className="text-xl">🚨</span><span>{error}</span>
+        <div className="alert alert-error mt-4 text-sm py-2 rounded-lg text-white">
+          <span>{error}</span>
         </div>
       )}
 
+      {/* 検索結果 */}
       {result && (
-        <div className="mt-6 p-5 bg-blue-50 border-l-4 border-blue-500 rounded-r-xl animation-fade-in shadow-sm">
-          <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-lg">
-            <span>🎯</span> このドアから一番便利なトイレ
-          </h3>
-          <div className="text-xl font-extrabold text-gray-900 ml-1">{result.name}</div>
-          <p className="text-sm text-gray-600 mt-1 ml-1 flex items-center gap-1">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
-            {result.address}
-          </p>
-           
-           {/* バッジの色を調整 */}
-           <div className="mt-4 flex gap-2 flex-wrap">
-              <span className={`badge ${result.is_wheelchair_accessible ? "badge-success text-white" : "bg-gray-200 text-gray-600"} gap-1 pl-1.5`}>
-                  {result.is_wheelchair_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                  車椅子
-              </span>
-              <span className={`badge ${result.has_diaper_changing_station ? "badge-success text-white" : "bg-gray-200 text-gray-600"} gap-1 pl-1.5`}>
-                  {result.has_diaper_changing_station && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                  おむつ
-              </span>
-              <span className={`badge ${result.is_ostomate_accessible ? "badge-success text-white" : "bg-gray-200 text-gray-600"} gap-1 pl-1.5`}>
-                  {result.is_ostomate_accessible && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                  オストメイト
-              </span>
-           </div>
-           
-           <a 
-            href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="mt-5 btn bg-blue-600 hover:bg-blue-700 text-white border-none w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 px-6"
-            style={{ color: 'white !important', textDecoration: 'none' }}
-           >
-            <span className="text-xl">🗺️</span>
-            <span className="font-bold">ルート案内</span>
-          </a>
+        <div className="mt-4 animate-fade-in">
+          <div className="text-xs text-gray-500 font-bold mb-2 ml-1">▼ あなたに最適なトイレ</div>
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
+              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-1">
+                {result.is_station_toilet && "🚉"} {result.name}
+              </h2>
+              <p className="text-xs text-gray-600 mb-3">{result.address}</p>
+              
+              <div className="flex gap-2 mb-3">
+                {result.is_wheelchair_accessible && <span className="badge badge-sm badge-outline text-blue-600 border-blue-600">♿ 車椅子</span>}
+                {result.has_diaper_changing_station && <span className="badge badge-sm badge-outline text-pink-600 border-pink-600">👶 おむつ</span>}
+                {result.is_ostomate_accessible && <span className="badge badge-sm badge-outline text-green-600 border-green-600">✚ オストメイト</span>}
+              </div>
+
+              <a 
+                href={`https://www.google.com/maps/dir/?api=1&destination=${result.latitude},${result.longitude}`}
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="btn bg-blue-600 hover:bg-blue-700 text-white border-none btn-sm w-full no-underline"
+              >
+                ルート案内
+              </a>
+          </div>
         </div>
       )}
     </div>

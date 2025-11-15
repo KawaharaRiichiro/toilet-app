@@ -69,26 +69,41 @@ export default function Home() {
       {/* コントロールパネル */}
       <div className="flex flex-col z-10 shadow-md bg-base-100">
         
-        {/* タブ切り替え (★ここを元のデザインに戻しました) */}
+        {/* タブ切り替え */}
         <div className="p-3 bg-base-200">
           <div role="tablist" className="tabs tabs-boxed bg-gray-300 p-1">
+            {/* 現在地タブ */}
             <a 
               role="tab" 
-              className={`tab flex-1 transition-all duration-200 font-bold text-base ${activeTab === 'current' ? 'tab-active bg-white text-primary shadow-sm' : 'text-gray-600'}`}
+              className={`tab flex-1 transition-all duration-200 font-bold text-base ${
+                activeTab === 'current' 
+                  ? 'tab-active bg-white text-primary shadow-sm' // 選択時：白背景・青文字
+                  : 'text-gray-600 hover:text-gray-800'          // 非選択時：グレー文字
+              }`}
               onClick={() => setActiveTab('current')}
             >
               📍 現在地から
             </a>
+            {/* 乗車中タブ */}
             <a 
               role="tab" 
-              className={`tab flex-1 transition-all duration-200 font-bold text-base ${activeTab === 'train' ? 'tab-active bg-white text-primary shadow-sm' : 'text-gray-600'}`}
+              className={`tab flex-1 transition-all duration-200 font-bold text-base ${
+                activeTab === 'train' 
+                  ? 'tab-active bg-white text-primary shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
               onClick={() => setActiveTab('train')}
             >
               🚃 乗車中から
             </a>
+            {/* 地図タブ */}
             <a 
               role="tab" 
-              className={`tab flex-1 transition-all duration-200 font-bold text-base ${activeTab === 'map' ? 'tab-active bg-white text-primary shadow-sm' : 'text-gray-600'}`}
+              className={`tab flex-1 transition-all duration-200 font-bold text-base ${
+                activeTab === 'map' 
+                  ? 'tab-active bg-white text-primary shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
               onClick={() => setActiveTab('map')}
             >
               🗺️ 地図から
@@ -116,7 +131,7 @@ export default function Home() {
                  href={`https://www.google.com/maps/dir/?api=1&destination=${nearestInfo.latitude},${nearestInfo.longitude}`}
                  target="_blank" 
                  rel="noopener noreferrer" 
-                 className="btn btn-primary btn-sm text-white no-underline"
+                 className="btn btn-primary btn-sm text-white no-underline shadow"
               >
                  ルート案内 
               </a>
@@ -167,7 +182,7 @@ export default function Home() {
                      改札内
                    </button>
                    <button 
-                     className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === false ? 'bg-blue-600 hover:bg-blue-700 !text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'}`}
+                     className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === false ? 'bg-blue-600 hover:bg-blue-700 !text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'}`}
                      onClick={() => handleGateFilterChange(false)}
                    >
                      改札外
@@ -187,11 +202,13 @@ export default function Home() {
             onUpdateNearest={(data: ToiletData | null) => setNearestInfo(data)} 
           />
         )}
+        
         {activeTab === 'train' && (
           <div className="absolute inset-0 overflow-y-auto bg-gray-50 pb-20">
             <InTrainSearch />
           </div>
         )}
+
         {activeTab === 'map' && (
           <div className="absolute inset-0">
             <ToiletMap filters={filters} />

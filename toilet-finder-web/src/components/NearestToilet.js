@@ -6,7 +6,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 const libraries = ['places', 'geometry'];
 
-// 距離計算ロジック
+// 距離計算（親コンポーネントで表示するため）
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
   const R = 6371e3; 
@@ -22,20 +22,19 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 export default function NearestToilet({ filters, onUpdateNearest }) {
-  const [toilets, setToilets] = useState([]);
+  const [toilets, setToilets] = useState([]); // マップ上の全ピン
   const [selectedToilet, setSelectedToilet] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   
   const mapRef = useRef(null);
   const supabase = createClientComponentClient();
 
-  const { isLoaded } = useLoadScript({
+  const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     libraries,
   });
 
-  // ★重要修正: centerオブジェクトをメモ化して固定する
-  // これにより、再レンダリング時に地図が初期位置に戻るのを防ぎます
+  // ★修正: 地図の初期位置をuseMemoで固定化（リセット防止）
   const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
 
   // 1. 現在地取得
@@ -49,13 +48,15 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
         };
         setUserLocation(pos);
         // 地図がロード済みなら移動
-        if (mapRef.current) mapRef.current.panTo(pos);
+        if (mapRef.current) {
+          mapRef.current.panTo(pos);
+        }
       },
       (err) => console.error(err)
     );
   }, []);
 
-  // 2. データ取得
+  // 2. データ取得 (Supabase RPCを直接呼ぶ)
   useEffect(() => {
     async function fetchToilets() {
       if (!userLocation) return;
@@ -68,6 +69,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
           });
 
         if (!error && data) {
+          // フィルタリング
           const filtered = data.filter(t => {
             if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
             if (filters?.diaper && !t.has_diaper_changing_station) return false;
@@ -78,13 +80,15 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
             return true;
           });
 
+          // 距離を計算して付与
           const withDistance = filtered.map(t => ({
             ...t,
             distance: calculateDistance(userLocation.lat, userLocation.lng, t.latitude, t.longitude)
           }));
 
-          setToilets(withDistance);
+          setToilets(withDistance); // マップのピン用
 
+          // 親(page.tsx)に一番近いトイレ情報を渡す
           if (onUpdateNearest) {
             onUpdateNearest(withDistance.length > 0 ? withDistance[0] : null);
           }
@@ -96,17 +100,19 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
     fetchToilets();
   }, [userLocation, filters, supabase, onUpdateNearest]);
 
-  if (!isLoaded) return <div className="p-4 text-center">地図読み込み中...</div>;
+  if (loadError) return <div className="p-4 text-center">地図の読み込みに失敗しました</div>;
+  if (!isLoaded) return <div className="p-4 text-center">地図を読み込み中...</div>;
 
   return (
     <div className="h-full w-full relative">
        <GoogleMap
           zoom={16}
-          center={defaultCenter} // メモ化した固定値を渡す
+          center={defaultCenter} // 固定化した初期値を渡す
           mapContainerStyle={{ width: '100%', height: '100%' }}
           options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
           onLoad={map => {
             mapRef.current = map;
+            // ロード完了時に現在地（取得済みなら）へ移動
             if(userLocation) map.panTo(userLocation);
           }}
         >
@@ -132,6 +138,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
                   setSelectedToilet(toilet);
                   if (onUpdateNearest) onUpdateNearest(toilet);
               }}
+              // 駅トイレは紫、それ以外は赤
               icon={{
                   url: toilet.is_station_toilet 
                   ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" 
