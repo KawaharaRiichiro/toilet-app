@@ -32,9 +32,12 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
     libraries,
   });
 
+  const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
+
   // 1. 現在地取得
   useEffect(() => {
     if (!navigator.geolocation) return;
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const pos = {
@@ -58,7 +61,6 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
         if (!res.ok) throw new Error('Failed to fetch nearest toilets');
         const data = await res.json();
 
-        // フィルタリング
         const filtered = data.filter(t => {
           if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
           if (filters?.diaper && !t.has_diaper_changing_station) return false;
@@ -69,7 +71,6 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
           return true;
         });
 
-        // 重複除去（公衆優先）
         const publicToilets = filtered.filter(t => !t.is_station_toilet);
         const stationToilets = filtered.filter(t => t.is_station_toilet);
         const uniqueStationToilets = stationToilets.filter(st => {
@@ -107,7 +108,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
     <div className="h-full w-full relative">
        <GoogleMap
           zoom={16}
-          center={{ lat: 35.681236, lng: 139.767125 }} 
+          center={defaultCenter}
           mapContainerStyle={{ width: '100%', height: '100%' }}
           options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
           onLoad={map => {
@@ -121,7 +122,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
               icon={{
                 path: google.maps.SymbolPath.CIRCLE,
                 scale: 8,
-                fillColor: "#4285F4", // 現在地（青）
+                fillColor: "#4285F4",
                 fillOpacity: 1,
                 strokeColor: "white",
                 strokeWeight: 2,
@@ -137,14 +138,11 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
                   setSelectedToilet(toilet);
                   if (onUpdateNearest) onUpdateNearest(toilet);
               }}
-              // ★修正: SVGパスで色分け
+              // ★修正: HTTPSのURLに変更
               icon={{
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 7,
-                  fillColor: toilet.is_station_toilet ? "#9333ea" : "#ef4444", // 紫(駅) / 赤(公衆)
-                  fillOpacity: 1,
-                  strokeColor: "white",
-                  strokeWeight: 2,
+                  url: toilet.is_station_toilet 
+                  ? "https://maps.google.com/mapfiles/ms/icons/purple-dot.png" 
+                  : "https://maps.google.com/mapfiles/ms/icons/red-dot.png" 
               }}
             />
           ))}
@@ -156,6 +154,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
               >
                   <div className="p-1 text-black min-w-[120px]">
                       <strong>{selectedToilet.name}</strong>
+                      <p className="text-xs">{selectedToilet.address}</p>
                   </div>
               </InfoWindow>
           )}
