@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 
-// コンポーネントの動的インポート
+// コンポーネントを動的インポート
 const NearestToilet = dynamic(() => import('@/components/NearestToilet'), { 
   ssr: false,
   loading: () => <div className="w-full h-full flex items-center justify-center text-gray-500">地図読み込み中...</div>
@@ -29,7 +29,7 @@ type ToiletData = {
   distance?: number;
 };
 
-// 距離フォーマット
+// 距離フォーマット関数
 const formatDistance = (meters?: number) => {
   if (!meters) return '';
   if (meters < 1000) return `${Math.round(meters)}m`;
@@ -64,6 +64,7 @@ export default function Home() {
           <span className="text-xl font-bold px-4">🚽 トイレ探索アプリ　すぐそこトイレ</span>
         </div>
         <div className="flex-none">
+           {/* 管理者ログインなどは別途認証機能が必要ですが、リンクのみ残します */}
            <Link href="/login" className="btn btn-ghost btn-sm text-white">
              管理者
            </Link>
@@ -117,7 +118,7 @@ export default function Home() {
               </div>
               
               <a 
-                 href={`https://www.google.com/maps/dir/?api=1&destination=${nearestInfo.latitude},${nearestInfo.longitude}`}
+                 href={`http://googleusercontent.com/maps.google.com/maps?q=${nearestInfo.latitude},${nearestInfo.longitude}`}
                  target="_blank" 
                  rel="noopener noreferrer" 
                  className="btn btn-primary btn-sm text-white no-underline shadow"
