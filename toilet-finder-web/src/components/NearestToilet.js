@@ -5,9 +5,6 @@ import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps
 
 const libraries = ['places', 'geometry'];
 
-// 地図の初期位置（東京駅）を定数化
-const DEFAULT_CENTER = { lat: 35.681236, lng: 139.767125 };
-
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
   const R = 6371e3; 
@@ -35,7 +32,8 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
     libraries,
   });
 
-  // 1. 現在地取得
+  const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
+
   useEffect(() => {
     if (!navigator.geolocation) return;
 
@@ -46,25 +44,18 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
           lng: position.coords.longitude,
         };
         setUserLocation(pos);
-        
-        // 地図がロード済みなら一度だけ移動
-        if (mapRef.current) {
-            mapRef.current.panTo(pos);
-        }
+        if (mapRef.current) mapRef.current.panTo(pos);
       },
       (err) => console.error(err)
     );
   }, []);
 
-  // 2. データ取得
   useEffect(() => {
     async function fetchToilets() {
       if (!userLocation) return;
       
       try {
-        // ★修正: limit=2000 に増やして広範囲のトイレを取得
         const res = await fetch(`${API_BASE_URL}/api/nearest?lat=${userLocation.lat}&lng=${userLocation.lng}&limit=2000`);
-        
         if (!res.ok) throw new Error('Failed to fetch nearest toilets');
         
         const data = await res.json();
@@ -79,7 +70,6 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
           return true;
         });
 
-        // 重複除去ロジック
         const publicToilets = filtered.filter(t => !t.is_station_toilet);
         const stationToilets = filtered.filter(t => t.is_station_toilet);
         const uniqueStationToilets = stationToilets.filter(st => {
@@ -117,8 +107,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
     <div className="h-full w-full relative">
        <GoogleMap
           zoom={16}
-          // ★修正: centerを固定値にすることで、再レンダリング時のリセットを防ぐ
-          center={DEFAULT_CENTER} 
+          center={defaultCenter}
           mapContainerStyle={{ width: '100%', height: '100%' }}
           options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
           onLoad={map => {
@@ -148,10 +137,11 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
                   setSelectedToilet(toilet);
                   if (onUpdateNearest) onUpdateNearest(toilet);
               }}
+              // ★修正: HTTPSのURLに変更
               icon={{
                   url: toilet.is_station_toilet 
-                  ? "http://googleusercontent.com/maps.google.com/mapfiles/ms/icons/purple-dot.png" 
-                  : undefined
+                  ? "https://maps.google.com/mapfiles/ms/icons/purple-dot.png" 
+                  : "https://maps.google.com/mapfiles/ms/icons/red-dot.png" 
               }}
             />
           ))}
