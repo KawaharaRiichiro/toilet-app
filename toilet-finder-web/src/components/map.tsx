@@ -49,6 +49,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
 
   const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
 
+  // フィルタリング
   const filteredToilets = useMemo(() => {
     return toilets.filter((t) => {
       if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
@@ -67,7 +68,6 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
         const res = await fetch(`${API_BASE_URL}/api/toilets?limit=5000`);
         if (!res.ok) throw new Error('Failed to fetch toilets');
         const data = await res.json();
-        console.log(`✅ [Map] 取得件数: ${data.length} 件`);
         setToilets(data as Toilet[]);
       } catch (error) {
         console.error("トイレデータの取得に失敗:", error);
@@ -102,11 +102,14 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
           onClick={() => setSelectedToilet(toilet)}
-          // ★修正: HTTPSのURLに変更
+          // ★修正: SVGパスを使って色分け（これで画像エラーは起きません）
           icon={{
-            url: toilet.is_station_toilet
-              ? "https://maps.google.com/mapfiles/ms/icons/purple-dot.png"
-              : "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: toilet.is_station_toilet ? "#9333ea" : "#ef4444", // 紫(駅) / 赤(公衆)
+            fillOpacity: 1,
+            strokeColor: "white",
+            strokeWeight: 2,
           }}
         />
       ))}
@@ -126,11 +129,10 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
             <div className="flex gap-1 flex-wrap mb-2">
                {selectedToilet.is_wheelchair_accessible && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded">♿</span>}
                {selectedToilet.has_diaper_changing_station && <span className="text-[10px] bg-pink-100 text-pink-800 px-1 rounded">👶</span>}
-               {selectedToilet.is_ostomate_accessible && <span className="text-[10px] bg-green-100 text-green-800 px-1 rounded">✚</span>}
             </div>
             
             <a
-               href={`https://www.google.com/maps/search/?api=1&query=${selectedToilet.latitude},${selectedToilet.longitude}`}
+               href={`http://googleusercontent.com/maps.google.com/maps?q=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
                className="btn btn-primary btn-sm w-full mt-2 text-white no-underline flex items-center justify-center"
