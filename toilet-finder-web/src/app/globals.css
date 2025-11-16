@@ -1,3 +1,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ... (既存のコード) ... */
+
+/* Google Mapsのスタイル干渉を防ぐ */
+.gm-style img {
+  max-width: none;
+}
+
+.gm-style button {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+  height: auto !important;
+  width: auto !important;
+  border-radius: 0 !important;
+  text-transform: none !important;
+  font-weight: normal !important;
+}
+
+/* ピンをクリックした時の吹き出し（InfoWindow）の閉じるボタンの修正 */
+.gm-ui-hover-effect {
+  background: none !important;
+  border: none !important;
+  top: 0 !important;
+  right: 0 !important;
+}
+.gm-ui-hover-effect > img {
+  width: 24px !important;
+  height: 24px !important;
+  margin: 5px !important; 
+}
