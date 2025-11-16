@@ -36,3 +36,10 @@
   height: 24px !important;
   margin: 5px !important; 
 }
+
+/* PC（画面幅768px以上）の時は、全体の文字サイズを少し大きくする */
+@media (min-width: 768px) {
+  html {
+    font-size: 110%; /* 基準を10%大きく */
+  }
+}

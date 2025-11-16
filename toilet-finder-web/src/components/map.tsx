@@ -10,6 +10,17 @@ const mapContainerStyle = {
   height: '100%',
 };
 
+// 地図の文字を大きくするスタイル設定
+const mapStyles = [
+  {
+    featureType: "all",
+    elementType: "labels.text",
+    stylers: [
+      { scale: 4 } // 文字の太さ・大きさを調整（通常は1～8くらい）
+    ]
+  }
+];
+
 type Toilet = {
   id: string;
   name: string;
@@ -95,6 +106,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
+        styles: mapStyles,
       }}
     >
       {filteredToilets.map((toilet) => (

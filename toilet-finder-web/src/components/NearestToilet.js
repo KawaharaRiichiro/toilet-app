@@ -6,6 +6,16 @@ import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps
 const libraries = ['places', 'geometry'];
 const DEFAULT_CENTER = { lat: 35.681236, lng: 139.767125 }; // 東京駅
 
+// 地図の文字を大きくするスタイル設定
+const mapStyles = [
+  {
+    featureType: "all",
+    elementType: "labels.text",
+    stylers: [
+      { scale: 3 } // 文字の太さ・大きさを調整（通常は1～8くらい）
+    ]
+  }
+];
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
   const R = 6371e3; 
@@ -97,7 +107,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
           zoom={16}
           center={DEFAULT_CENTER} 
           mapContainerStyle={{ width: '100%', height: '100%' }}
-          options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+          options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, styles: mapStyles, }}
           onLoad={map => {
             mapRef.current = map;
             if(userLocation) map.panTo(userLocation);
