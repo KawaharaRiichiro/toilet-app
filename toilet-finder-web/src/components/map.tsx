@@ -2,6 +2,7 @@
 
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from "@react-google-maps/api";
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 const libraries: ("places" | "geometry")[] = ["places", "geometry"];
 
@@ -34,12 +35,26 @@ type ToiletMapProps = {
   };
 };
 
+// ★追加: 距離計算関数 (2点間のメートル数を返す)
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371e3; // 地球の半径(m)
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+
 export default function ToiletMap({ filters }: ToiletMapProps) {
   const [toilets, setToilets] = useState<Toilet[]>([]);
   const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
+  const supabase = createClientComponentClient();
 
-  // APIのURLを取得
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
@@ -48,34 +63,51 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
     libraries: libraries,
   });
 
-  const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
+  // ★修正: 重複除去とフィルタリングを同時に行う
+  const displayToilets = useMemo(() => {
+    // 1. まずフィルター条件で絞り込む
+    const filtered = toilets.filter((t) => {
+      if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
+      if (filters?.diaper && !t.has_diaper_changing_station) return false;
+      if (filters?.ostomate && !t.is_ostomate_accessible) return false;
+      if (filters?.inside_gate !== null && filters?.inside_gate !== undefined) {
+         if (t.inside_gate !== filters.inside_gate) return false;
+      }
+      return true;
+    });
+
+    // 2. 重複除去ロジック (ピンク優先)
+    const publicToilets = filtered.filter(t => !t.is_station_toilet); // ピンク(公衆)
+    const stationToilets = filtered.filter(t => t.is_station_toilet); // 紫(駅)
+
+    const uniqueStationToilets = stationToilets.filter(st => {
+      // この駅トイレの近く(30m以内)に公衆トイレがあるか？
+      const hasDuplicate = publicToilets.some(pt => {
+        const dist = getDistance(st.latitude, st.longitude, pt.latitude, pt.longitude);
+        return dist < 30; // 30m以内なら重複とみなす
+      });
+      // 重複がなければ表示する
+      return !hasDuplicate;
+    });
+
+    // 合体して返す
+    return [...publicToilets, ...uniqueStationToilets];
+  }, [toilets, filters]);
 
   useEffect(() => {
-    const fetchToilets = async () => {
-      try {
-        // クエリパラメータの作成
-        const params = new URLSearchParams();
-        params.append("limit", "5000"); // 全件取得
-        if (filters.wheelchair) params.append("wheelchair", "true");
-        if (filters.diaper) params.append("diaper", "true");
-        if (filters.ostomate) params.append("ostomate", "true");
-        if (filters.inside_gate !== null) params.append("inside_gate", filters.inside_gate.toString());
+    async function fetchToilets() {
+      // Supabaseから全件取得
+      const { data, error } = await supabase
+        .from("toilets")
+        .select("*")
+        .limit(5000);
 
-        // ★API経由で取得
-        const res = await fetch(`${API_BASE_URL}/api/toilets?${params.toString()}`);
-        
-        if (!res.ok) throw new Error('Failed to fetch toilets');
-        
-        const data = await res.json();
-        console.log(`✅ [API] 地図データ取得: ${data.length}件`);
-        setToilets(data);
-      } catch (error) {
-        console.error("トイレデータの取得に失敗:", error);
+      if (!error && data) {
+        setToilets(data as Toilet[]);
       }
-    };
-
+    }
     fetchToilets();
-  }, [filters, API_BASE_URL]);
+  }, [supabase]);
 
   const onLoad = useCallback(function callback(map: google.maps.Map) {
     const bounds = new google.maps.LatLngBounds();
@@ -98,7 +130,8 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
         fullscreenControl: false,
       }}
     >
-      {toilets.map((toilet) => (
+      {/* ★ displayToilets を使うように変更 */}
+      {displayToilets.map((toilet) => (
         <MarkerF
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
