@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+// ★削除: Supabase関連
 
 export default function InTrainSearch() {
   const [line, setLine] = useState('');       
@@ -23,13 +24,11 @@ export default function InTrainSearch() {
     const fetchLines = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/train/lines`);
-        if (!res.ok) throw new Error('Network response was not ok');
+        if (!res.ok) return;
         const data = await res.json();
         setLineList(data);
         if (data.length > 0) setLine(data[0]);
-      } catch (e) {
-        console.error("路線取得エラー", e);
-      }
+      } catch (e) { console.error(e); }
     };
     fetchLines();
   }, [API_BASE_URL]);
@@ -40,6 +39,7 @@ export default function InTrainSearch() {
     const fetchStations = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/train/stations?line=${encodeURIComponent(line)}`);
+        if (!res.ok) return;
         const data = await res.json();
         setStationList(data);
         if (data.length > 0) setStation(data[0]);
@@ -59,6 +59,7 @@ export default function InTrainSearch() {
     const fetchDirections = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/train/directions?line=${encodeURIComponent(line)}&station=${encodeURIComponent(station)}`);
+        if (!res.ok) return;
         const data = await res.json();
         setDirectionList(data);
         if (data.length > 0) setDirection(data[0]);
@@ -85,15 +86,13 @@ export default function InTrainSearch() {
       const res = await fetch(`${API_BASE_URL}/api/train/search?${params.toString()}`);
       
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "トイレが見つかりませんでした");
+        throw new Error("トイレが見つかりませんでした");
       }
       
       const data = await res.json();
       setResult(data);
 
     } catch (err) {
-      console.error(err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -118,7 +117,6 @@ export default function InTrainSearch() {
               </select>
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-2">
             {directionList.length > 0 ? (
               <div className="form-control w-full">
@@ -128,7 +126,6 @@ export default function InTrainSearch() {
                 </select>
               </div>
             ) : <div className="hidden"></div>}
-
             <div className="form-control w-full">
               <label className="label py-0 pb-1"><span className="label-text text-xs font-bold text-gray-500">乗車位置</span></label>
               <select className="select select-bordered select-sm w-full font-bold text-gray-700" value={car} onChange={(e) => setCar(e.target.value)}>
@@ -137,20 +134,11 @@ export default function InTrainSearch() {
             </div>
           </div>
         </div>
-
-        <button 
-          className="btn bg-blue-600 hover:bg-blue-700 text-white border-none btn-sm w-full font-bold mt-4 shadow-sm"
-          onClick={handleSearch}
-          disabled={isLoading || !line || !station}
-        >
+        <button className="btn bg-blue-600 hover:bg-blue-700 text-white border-none btn-sm w-full font-bold mt-4 shadow-sm" onClick={handleSearch} disabled={isLoading || !line || !station}>
           {isLoading ? <span className="loading loading-spinner loading-xs"></span> : "トイレを探す"}
         </button>
       </div>
-
-      {error && (
-        <div className="alert alert-error mt-4 text-sm py-2 rounded-lg text-white"><span>{error}</span></div>
-      )}
-
+      {error && <div className="alert alert-error mt-4 text-sm py-2 rounded-lg text-white"><span>{error}</span></div>}
       {result && (
         <div className="mt-4 animate-fade-in">
           <div className="text-xs text-gray-500 font-bold mb-2 ml-1">▼ あなたに最適なトイレ</div>
@@ -164,12 +152,7 @@ export default function InTrainSearch() {
                 {result.has_diaper_changing_station && <span className="badge badge-sm badge-outline text-pink-600 border-pink-600">👶 おむつ</span>}
                 {result.is_ostomate_accessible && <span className="badge badge-sm badge-outline text-green-600 border-green-600">✚ オストメイト</span>}
               </div>
-              <a 
-                href={`http://googleusercontent.com/maps.google.com/maps?q=${result.latitude},${result.longitude}`}
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="btn bg-blue-600 hover:bg-blue-700 text-white border-none btn-sm w-full no-underline"
-              >
+              <a href={`http://googleusercontent.com/maps.google.com/maps?q=${result.latitude},${result.longitude}`} target="_blank" rel="noopener noreferrer" className="btn bg-blue-600 hover:bg-blue-700 text-white border-none btn-sm w-full no-underline">
                 ルート案内
               </a>
           </div>

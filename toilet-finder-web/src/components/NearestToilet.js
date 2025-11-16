@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 const libraries = ['places', 'geometry'];
+
+// ★修正1: 地図の初期位置を外に定義（これで再レンダリング時に地図がリセットされなくなります）
+const DEFAULT_CENTER = { lat: 35.681236, lng: 139.767125 };
 
 // 距離計算
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -27,7 +29,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
   const [userLocation, setUserLocation] = useState(null);
   
   const mapRef = useRef(null);
-  const supabase = createClientComponentClient();
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
@@ -37,6 +39,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
   // 1. 現在地取得
   useEffect(() => {
     if (!navigator.geolocation) return;
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const pos = {
@@ -44,71 +47,71 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
           lng: position.coords.longitude,
         };
         setUserLocation(pos);
+        // 地図がロード済みなら移動
         if (mapRef.current) mapRef.current.panTo(pos);
       },
       (err) => console.error(err)
     );
   }, []);
 
-  // 2. データ取得
+  // 2. データ取得 (API経由)
   useEffect(() => {
     async function fetchToilets() {
       if (!userLocation) return;
       
       try {
-        const { data, error } = await supabase
-          .rpc('nearby_toilets', { 
-            lat: userLocation.lat, 
-            long: userLocation.lng 
-          });
+        // ★修正2: limitを200から2000に増やしました
+        const res = await fetch(`${API_BASE_URL}/api/nearest?lat=${userLocation.lat}&lng=${userLocation.lng}&limit=2000`);
+        
+        if (!res.ok) throw new Error('Failed to fetch nearest toilets');
+        
+        const data = await res.json();
 
-        if (!error && data) {
-          // フィルタリング
-          const filtered = data.filter(t => {
-            if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
-            if (filters?.diaper && !t.has_diaper_changing_station) return false;
-            if (filters?.ostomate && !t.is_ostomate_accessible) return false;
-            if (filters?.inside_gate !== null && filters?.inside_gate !== undefined) {
-               if (t.inside_gate !== filters.inside_gate) return false;
-            }
-            return true;
-          });
-
-          // ★追加: 重複除去ロジック
-          const publicToilets = filtered.filter(t => !t.is_station_toilet);
-          const stationToilets = filtered.filter(t => t.is_station_toilet);
-
-          const uniqueStationToilets = stationToilets.filter(st => {
-            const hasDuplicate = publicToilets.some(pt => {
-              const dist = calculateDistance(st.latitude, st.longitude, pt.latitude, pt.longitude);
-              return dist < 30; // 30m以内なら重複とみなして消す
-            });
-            return !hasDuplicate;
-          });
-          
-          // 統合して距離計算
-          const combined = [...publicToilets, ...uniqueStationToilets];
-          const withDistance = combined.map(t => ({
-            ...t,
-            distance: calculateDistance(userLocation.lat, userLocation.lng, t.latitude, t.longitude)
-          }));
-
-          // 距離順に再ソート（念のため）
-          withDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-
-          setToilets(withDistance);
-
-          // 親へ通知
-          if (onUpdateNearest) {
-            onUpdateNearest(withDistance.length > 0 ? withDistance[0] : null);
+        // フィルタリング
+        const filtered = data.filter(t => {
+          if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
+          if (filters?.diaper && !t.has_diaper_changing_station) return false;
+          if (filters?.ostomate && !t.is_ostomate_accessible) return false;
+          if (filters?.inside_gate !== null && filters?.inside_gate !== undefined) {
+             if (t.inside_gate !== filters.inside_gate) return false;
           }
+          return true;
+        });
+
+        // 距離計算と重複除去（公衆トイレ優先）
+        const publicToilets = filtered.filter(t => !t.is_station_toilet);
+        const stationToilets = filtered.filter(t => t.is_station_toilet);
+
+        const uniqueStationToilets = stationToilets.filter(st => {
+          const hasDuplicate = publicToilets.some(pt => {
+            const dist = calculateDistance(st.latitude, st.longitude, pt.latitude, pt.longitude);
+            return dist < 30; 
+          });
+          return !hasDuplicate;
+        });
+        
+        const combined = [...publicToilets, ...uniqueStationToilets];
+        const withDistance = combined.map(t => ({
+          ...t,
+          distance: calculateDistance(userLocation.lat, userLocation.lng, t.latitude, t.longitude)
+        }));
+
+        // 距離順ソート
+        withDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+
+        setToilets(withDistance);
+
+        // 親へ通知
+        if (onUpdateNearest) {
+          onUpdateNearest(withDistance.length > 0 ? withDistance[0] : null);
         }
+
       } catch (err) {
-        console.error(err);
+        console.error("API Error:", err);
       }
     }
     fetchToilets();
-  }, [userLocation, filters, supabase, onUpdateNearest]);
+  }, [userLocation, filters, API_BASE_URL, onUpdateNearest]);
 
   if (!isLoaded) return <div className="p-4 text-center">地図読み込み中...</div>;
 
@@ -116,7 +119,7 @@ export default function NearestToilet({ filters, onUpdateNearest }) {
     <div className="h-full w-full relative">
        <GoogleMap
           zoom={16}
-          center={{ lat: 35.681236, lng: 139.767125 }} 
+          center={DEFAULT_CENTER} // ★修正: 定数化した初期位置を使用（これでリセットされません）
           mapContainerStyle={{ width: '100%', height: '100%' }}
           options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
           onLoad={map => {

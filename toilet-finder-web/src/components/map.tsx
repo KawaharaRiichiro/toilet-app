@@ -2,6 +2,7 @@
 
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from "@react-google-maps/api";
 import { useEffect, useState, useCallback, useMemo } from "react";
+// ★削除: Supabase関連のインポート
 
 const libraries: ("places" | "geometry")[] = ["places", "geometry"];
 
@@ -37,8 +38,8 @@ type ToiletMapProps = {
 export default function ToiletMap({ filters }: ToiletMapProps) {
   const [toilets, setToilets] = useState<Toilet[]>([]);
   const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
-
-  // API URLの取得
+  
+  // ★追加: API URL
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -64,7 +65,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
   useEffect(() => {
     const fetchToilets = async () => {
       try {
-        // ★API経由で全件取得
+        // ★修正: API経由で全件取得
         const res = await fetch(`${API_BASE_URL}/api/toilets?limit=5000`);
         if (!res.ok) throw new Error('Failed to fetch toilets');
         const data = await res.json();
@@ -78,7 +79,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
 
   const onLoad = useCallback(function callback(map: google.maps.Map) {
     const bounds = new google.maps.LatLngBounds();
-    // 東京駅周辺を初期表示
+    // 東京駅周辺
     bounds.extend({ lat: 35.681236, lng: 139.767125 });
     map.fitBounds(bounds);
     const listener = google.maps.event.addListener(map, "idle", () => { 
@@ -107,11 +108,8 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
           onClick={() => setSelectedToilet(toilet)}
-          icon={
-            toilet.is_station_toilet
-              ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png"
-              : undefined
-          }
+          // 駅トイレは紫
+          icon={toilet.is_station_toilet ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" : undefined}
         />
       ))}
 
