@@ -16,6 +16,7 @@ type Toilet = {
   address: string | null;
   latitude: number;
   longitude: number;
+  is_station_toilet: boolean;
   opening_hours: string | null;
   availability_notes: string | null;
   is_wheelchair_accessible: boolean;
@@ -37,17 +38,18 @@ type ToiletMapProps = {
 export default function ToiletMap({ filters }: ToiletMapProps) {
   const [toilets, setToilets] = useState<Toilet[]>([]);
   const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
-  // ★追加: マップのインスタンスが準備できたか管理する
-  const [map, setMap] = useState<google.maps.Map | null>(null);
 
+  // API URL
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-map-script-main", // IDをユニークにする
+    id: "google-map-script",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     language: "ja",
     libraries: libraries,
   });
+
+  const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
 
   // フィルタリング処理
   const filteredToilets = useMemo(() => {
@@ -62,13 +64,14 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
     });
   }, [toilets, filters]);
 
-  // データ取得
   useEffect(() => {
     const fetchToilets = async () => {
       try {
+        // ★修正: limit=5000 を明示的に指定
         const res = await fetch(`${API_BASE_URL}/api/toilets?limit=5000`);
         if (!res.ok) throw new Error('Failed to fetch toilets');
         const data = await res.json();
+        console.log(`✅ [Map] 取得件数: ${data.length} 件`);
         setToilets(data);
       } catch (error) {
         console.error("トイレデータの取得に失敗:", error);
@@ -77,22 +80,11 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
     fetchToilets();
   }, [API_BASE_URL]);
 
-  // ★修正: マップがロードされたら state にセット
-  const onLoad = useCallback(function callback(mapInstance: google.maps.Map) {
+  const onLoad = useCallback(function callback(map: google.maps.Map) {
     const bounds = new google.maps.LatLngBounds();
-    bounds.extend({ lat: 35.681236, lng: 139.767125 });
-    mapInstance.fitBounds(bounds);
-    const listener = google.maps.event.addListener(mapInstance, "idle", () => { 
-      if (mapInstance.getZoom()! > 15) mapInstance.setZoom(15); 
-      google.maps.event.removeListener(listener); 
-    });
-    setMap(mapInstance);
-  }, []);
-
-  // アンマウント時のクリーンアップ
-  const onUnmount = useCallback(function callback(map: google.maps.Map) {
-    setMap(null);
-  }, []);
+    bounds.extend(defaultCenter);
+    map.setCenter(defaultCenter);
+  }, [defaultCenter]);
 
   if (loadError) return <div className="h-full flex items-center justify-center text-red-500">地図エラー</div>;
   if (!isLoaded) return <div className="h-full flex items-center justify-center text-gray-500">読み込み中...</div>;
@@ -100,25 +92,23 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
   return (
     <GoogleMap
       mapContainerStyle={mapContainerStyle}
-      center={{ lat: 35.681236, lng: 139.767125 }}
+      center={defaultCenter}
       zoom={15}
       onLoad={onLoad}
-      onUnmount={onUnmount} // クリーンアップを追加
       options={{
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
       }}
     >
-      {/* ★修正: マップの準備ができてからマーカーを描画する */}
-      {map && filteredToilets.map((toilet) => (
+      {filteredToilets.map((toilet) => (
         <MarkerF
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
           onClick={() => setSelectedToilet(toilet)}
           icon={
             toilet.is_station_toilet
-              ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png"
+              ? "http://googleusercontent.com/maps.google.com/mapfiles/ms/icons/purple-dot.png" // 紫ピン
               : undefined
           }
         />
@@ -143,7 +133,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
             </div>
             
             <a
-               href={`http://googleusercontent.com/maps.google.com/maps?q=${selectedToilet.latitude},${selectedToilet.longitude}`}
+               href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
                className="btn btn-primary btn-sm w-full mt-2 text-white no-underline flex items-center justify-center"
