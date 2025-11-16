@@ -29,7 +29,7 @@ type ToiletData = {
   distance?: number;
 };
 
-// 距離フォーマット関数
+// 距離フォーマット
 const formatDistance = (meters?: number) => {
   if (!meters) return '';
   if (meters < 1000) return `${Math.round(meters)}m`;
@@ -59,41 +59,49 @@ export default function Home() {
     <div className="flex flex-col h-screen bg-gray-100">
 
       {/* ヘッダー */}
-      <header className="navbar bg-primary text-primary-content shadow-md z-20">
+      <header className="navbar bg-white text-gray-800 shadow-sm z-20 border-b border-gray-200">
         <div className="flex-1">
-          <span className="text-xl font-bold px-4">🚽 トイレ探索アプリ　すぐそこトイレ</span>
+          <span className="text-lg font-bold px-4">🚽 すぐそこトイレ</span>
         </div>
         <div className="flex-none">
-           {/* 管理者ログインなどは別途認証機能が必要ですが、リンクのみ残します */}
-           <Link href="/login" className="btn btn-ghost btn-sm text-white">
+           <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 font-medium px-3">
              管理者
            </Link>
         </div>
       </header>
 
       {/* コントロールパネル */}
-      <div className="flex flex-col z-10 shadow-md bg-base-100">
+      <div className="flex flex-col z-10 shadow-sm bg-white">
         
         {/* タブ切り替え */}
-        <div className="p-3 bg-base-200">
-          <div role="tablist" className="tabs tabs-boxed grid grid-cols-3 gap-2">
+        <div className="px-4 py-3 bg-gray-100">
+          <div className="flex p-1 bg-gray-200 rounded-lg">
             <button 
-              role="tab" 
-              className={`tab font-bold transition-all duration-200 ${activeTab === 'current' ? 'tab-active bg-primary text-primary-content shadow' : 'bg-base-100'}`}
+              className={`flex-1 py-2 text-sm font-bold rounded-md transition-all duration-200 ${
+                activeTab === 'current' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
               onClick={() => setActiveTab('current')}
             >
               📍 現在地から
             </button>
             <button 
-              role="tab" 
-              className={`tab font-bold transition-all duration-200 ${activeTab === 'train' ? 'tab-active bg-primary text-primary-content shadow' : 'bg-base-100'}`}
+              className={`flex-1 py-2 text-sm font-bold rounded-md transition-all duration-200 ${
+                activeTab === 'train' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
               onClick={() => setActiveTab('train')}
             >
               🚃 乗車中から
             </button>
             <button 
-              role="tab" 
-              className={`tab font-bold transition-all duration-200 ${activeTab === 'map' ? 'tab-active bg-primary text-primary-content shadow' : 'bg-base-100'}`}
+              className={`flex-1 py-2 text-sm font-bold rounded-md transition-all duration-200 ${
+                activeTab === 'map' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
               onClick={() => setActiveTab('map')}
             >
               🗺️ 地図から
@@ -101,86 +109,81 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 最寄りトイレ情報パネル */}
+        {/* 最寄りトイレ情報パネル (現在地タブかつデータがある時のみ) */}
         {activeTab === 'current' && nearestInfo && (
-          <div className="bg-white p-3 border-b border-gray-200 animate-fade-in">
+          <div className="px-4 py-3 bg-white border-b border-gray-200 animate-fade-in">
             <div className="flex justify-between items-start mb-2">
               <div>
-                <div className="text-xs text-gray-500 font-bold mb-1">▼ すぐそこ！最寄りのトイレ</div>
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <div className="text-xs text-gray-500 font-bold mb-1">▼ 一番近いトイレ</div>
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   {nearestInfo.is_station_toilet && "🚉"}
                   {nearestInfo.name}
-                  <span className="text-red-500 text-sm ml-2 font-bold">
+                  <span className="text-red-500 text-base ml-2">
                     {formatDistance(nearestInfo.distance)}
                   </span>
                 </h2>
                 <p className="text-xs text-gray-500 mt-1">{nearestInfo.address}</p>
               </div>
               
+              {/* ルート案内ボタン (青色強制) */}
               <a 
-                 href={`http://googleusercontent.com/maps.google.com/maps?q=${nearestInfo.latitude},${nearestInfo.longitude}`}
+                 href={`https://www.google.com/maps/dir/?api=1&destination=${nearestInfo.latitude},${nearestInfo.longitude}`}
                  target="_blank" 
                  rel="noopener noreferrer" 
-                 className="btn btn-primary btn-sm text-white no-underline shadow"
+                 className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded-full shadow-md no-underline flex items-center"
               >
                  ルート案内 
               </a>
             </div>
             
-            <div className="flex gap-2 mt-1">
-               {nearestInfo.is_wheelchair_accessible && <span className="badge badge-sm badge-outline text-blue-600 border-blue-600">♿ 車椅子</span>}
-               {nearestInfo.has_diaper_changing_station && <span className="badge badge-sm badge-outline text-pink-600 border-pink-600">👶 おむつ</span>}
-               {nearestInfo.is_ostomate_accessible && <span className="badge badge-sm badge-outline text-green-600 border-green-600">✚ オストメイト</span>}
+            {/* 属性アイコン */}
+            <div className="flex gap-2 mt-2">
+               {nearestInfo.is_wheelchair_accessible && <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded border border-blue-200">♿ 車椅子</span>}
+               {nearestInfo.has_diaper_changing_station && <span className="px-2 py-0.5 text-xs bg-pink-100 text-pink-800 rounded border border-pink-200">👶 おむつ</span>}
+               {nearestInfo.is_ostomate_accessible && <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded border border-green-200">✚ オストメイト</span>}
             </div>
           </div>
         )}
 
-        {/* 共通フィルター */}
+        {/* 共通フィルター (乗車中以外で表示) */}
         {activeTab !== 'train' && (
-          <div className="bg-base-100 p-3 overflow-x-auto whitespace-nowrap border-b border-base-200">
+          <div className="px-4 py-2 bg-white border-b border-gray-200 overflow-x-auto whitespace-nowrap">
              <div className="flex items-center gap-6">
-               
-               {/* 設備フィルター */}
+               {/* 設備 */}
                <div className="flex items-center gap-2">
-                 <span className="text-sm font-bold text-gray-500">設備:</span>
+                 <span className="text-xs font-bold text-gray-500">設備:</span>
                  <div className="flex gap-2">
-                   <label className="cursor-pointer label border border-gray-300 rounded-lg px-3 py-1 hover:bg-base-200 transition bg-white">
-                     <span className="label-text font-medium mr-2 text-gray-700">♿ 車椅子</span>
-                     <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.wheelchair} onChange={() => handleCheckboxChange('wheelchair')} />
+                   <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 transition">
+                     <input type="checkbox" className="checkbox checkbox-xs checkbox-primary" checked={filters.wheelchair} onChange={() => handleCheckboxChange('wheelchair')} />
+                     <span className="text-xs font-bold text-gray-700">♿ 車椅子</span>
                    </label>
-                   <label className="cursor-pointer label border border-gray-300 rounded-lg px-3 py-1 hover:bg-base-200 transition bg-white">
-                     <span className="label-text font-medium mr-2 text-gray-700">👶 おむつ</span>
-                     <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.diaper} onChange={() => handleCheckboxChange('diaper')} />
+                   <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 transition">
+                     <input type="checkbox" className="checkbox checkbox-xs checkbox-secondary" checked={filters.diaper} onChange={() => handleCheckboxChange('diaper')} />
+                     <span className="text-xs font-bold text-gray-700">👶 おむつ</span>
                    </label>
-                   <label className="cursor-pointer label border border-gray-300 rounded-lg px-3 py-1 hover:bg-base-200 transition bg-white">
-                     <span className="label-text font-medium mr-2 text-gray-700">✚ オストメイト</span>
-                     <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={filters.ostomate} onChange={() => handleCheckboxChange('ostomate')} />
+                   <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 transition">
+                     <input type="checkbox" className="checkbox checkbox-xs checkbox-accent" checked={filters.ostomate} onChange={() => handleCheckboxChange('ostomate')} />
+                     <span className="text-xs font-bold text-gray-700">✚ オストメイト</span>
                    </label>
                  </div>
                </div>
 
-               {/* 場所フィルター */}
+               {/* 場所 */}
                <div className="flex items-center gap-2 border-l pl-4">
-                 <span className="text-sm font-bold text-gray-500">場所:</span>
-                 <div className="join">
+                 <span className="text-xs font-bold text-gray-500">場所:</span>
+                 <div className="flex rounded-md shadow-sm" role="group">
                    <button 
-                     className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === null ? 'bg-blue-600 hover:bg-blue-700 !text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'}`}
+                     className={`px-3 py-1 text-xs font-bold border ${filters.inside_gate === null ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'} rounded-l-md`}
                      onClick={() => handleGateFilterChange(null)}
-                   >
-                     全て
-                   </button>
+                   >全て</button>
                    <button 
-                     className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === true ? 'bg-blue-600 hover:bg-blue-700 !text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'}`}
+                     className={`px-3 py-1 text-xs font-bold border-t border-b border-r ${filters.inside_gate === true ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                      onClick={() => handleGateFilterChange(true)}
-                   >
-                     改札内
-                   </button>
+                   >改札内</button>
                    <button 
-                     className={`join-item btn btn-sm px-4 font-medium transition-colors duration-200 ${filters.inside_gate === false ? 'bg-blue-600 hover:bg-blue-700 !text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'}`}
+                     className={`px-3 py-1 text-xs font-bold border-t border-b border-r ${filters.inside_gate === false ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'} rounded-r-md`}
                      onClick={() => handleGateFilterChange(false)}
-                   >
-                     改札外
-                   </button>
+                   >改札外</button>
                  </div>
                </div>
              </div>
@@ -211,5 +214,4 @@ export default function Home() {
       </div>
     </div>
   );
-  
 }
