@@ -2,13 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ... (既存のコード) ... */
+/* ▼▼▼ Google Maps と daisyUI の競合対策（これだけは残してください） ▼▼▼ */
 
-/* Google Mapsのスタイル干渉を防ぐ */
+/* 1. 地図内の画像（ピンなど）が勝手にリサイズされるのを防ぐ */
 .gm-style img {
-  max-width: none;
+  max-width: none !important;
 }
 
+/* 2. 地図内のボタン（ズームなど）のデザイン崩れを防ぐ */
 .gm-style button {
   background: none !important;
   border: none !important;
@@ -23,7 +24,7 @@
   font-weight: normal !important;
 }
 
-/* ピンをクリックした時の吹き出し（InfoWindow）の閉じるボタンの修正 */
+/* 3. 吹き出し（InfoWindow）の「×」閉じるボタンの修正 */
 .gm-ui-hover-effect {
   background: none !important;
   border: none !important;
