@@ -10,13 +10,13 @@ const mapContainerStyle = {
   height: '100%',
 };
 
+// ★修正: 重複していた 'is_station_toilet' を1つに整理しました
 type Toilet = {
   id: string;
   name: string;
   address: string | null;
   latitude: number;
   longitude: number;
-  is_station_toilet: boolean;
   opening_hours: string | null;
   availability_notes: string | null;
   is_wheelchair_accessible: boolean;
@@ -67,7 +67,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
   useEffect(() => {
     const fetchToilets = async () => {
       try {
-        // ★修正: limit=5000 を明示的に指定
+        // API経由で全件取得
         const res = await fetch(`${API_BASE_URL}/api/toilets?limit=5000`);
         if (!res.ok) throw new Error('Failed to fetch toilets');
         const data = await res.json();
@@ -82,9 +82,14 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
 
   const onLoad = useCallback(function callback(map: google.maps.Map) {
     const bounds = new google.maps.LatLngBounds();
-    bounds.extend(defaultCenter);
-    map.setCenter(defaultCenter);
-  }, [defaultCenter]);
+    // 東京駅周辺
+    bounds.extend({ lat: 35.681236, lng: 139.767125 });
+    map.fitBounds(bounds);
+    const listener = google.maps.event.addListener(map, "idle", () => { 
+      if (map.getZoom()! > 15) map.setZoom(15); 
+      google.maps.event.removeListener(listener); 
+    });
+  }, []);
 
   if (loadError) return <div className="h-full flex items-center justify-center text-red-500">地図エラー</div>;
   if (!isLoaded) return <div className="h-full flex items-center justify-center text-gray-500">読み込み中...</div>;
@@ -106,9 +111,10 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
           onClick={() => setSelectedToilet(toilet)}
+          // 駅トイレは紫、それ以外はデフォルト（赤）
           icon={
             toilet.is_station_toilet
-              ? "http://googleusercontent.com/maps.google.com/mapfiles/ms/icons/purple-dot.png" // 紫ピン
+              ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png"
               : undefined
           }
         />
@@ -133,7 +139,7 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
             </div>
             
             <a
-               href={`https://www.google.com/maps/dir/?api=1&destination=${selectedToilet.latitude},${selectedToilet.longitude}`}
+               href={`http://googleusercontent.com/maps.google.com/maps?q=${selectedToilet.latitude},${selectedToilet.longitude}`}
                target="_blank"
                rel="noopener noreferrer"
                className="btn btn-primary btn-sm w-full mt-2 text-white no-underline flex items-center justify-center"
