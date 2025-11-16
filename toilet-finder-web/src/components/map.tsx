@@ -2,7 +2,6 @@
 
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from "@react-google-maps/api";
 import { useEffect, useState, useCallback, useMemo } from "react";
-// ★削除: Supabase関連のインポート
 
 const libraries: ("places" | "geometry")[] = ["places", "geometry"];
 
@@ -38,12 +37,13 @@ type ToiletMapProps = {
 export default function ToiletMap({ filters }: ToiletMapProps) {
   const [toilets, setToilets] = useState<Toilet[]>([]);
   const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
-  
-  // ★追加: API URL
+  // ★追加: マップのインスタンスが準備できたか管理する
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-map-script",
+    id: "google-map-script-main", // IDをユニークにする
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     language: "ja",
     libraries: libraries,
@@ -62,10 +62,10 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
     });
   }, [toilets, filters]);
 
+  // データ取得
   useEffect(() => {
     const fetchToilets = async () => {
       try {
-        // ★修正: API経由で全件取得
         const res = await fetch(`${API_BASE_URL}/api/toilets?limit=5000`);
         if (!res.ok) throw new Error('Failed to fetch toilets');
         const data = await res.json();
@@ -77,19 +77,25 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
     fetchToilets();
   }, [API_BASE_URL]);
 
-  const onLoad = useCallback(function callback(map: google.maps.Map) {
+  // ★修正: マップがロードされたら state にセット
+  const onLoad = useCallback(function callback(mapInstance: google.maps.Map) {
     const bounds = new google.maps.LatLngBounds();
-    // 東京駅周辺
     bounds.extend({ lat: 35.681236, lng: 139.767125 });
-    map.fitBounds(bounds);
-    const listener = google.maps.event.addListener(map, "idle", () => { 
-      if (map.getZoom()! > 15) map.setZoom(15); 
+    mapInstance.fitBounds(bounds);
+    const listener = google.maps.event.addListener(mapInstance, "idle", () => { 
+      if (mapInstance.getZoom()! > 15) mapInstance.setZoom(15); 
       google.maps.event.removeListener(listener); 
     });
+    setMap(mapInstance);
   }, []);
 
-  if (loadError) return <div className="h-full flex items-center justify-center">地図エラー</div>;
-  if (!isLoaded) return <div className="h-full flex items-center justify-center">読み込み中...</div>;
+  // アンマウント時のクリーンアップ
+  const onUnmount = useCallback(function callback(map: google.maps.Map) {
+    setMap(null);
+  }, []);
+
+  if (loadError) return <div className="h-full flex items-center justify-center text-red-500">地図エラー</div>;
+  if (!isLoaded) return <div className="h-full flex items-center justify-center text-gray-500">読み込み中...</div>;
 
   return (
     <GoogleMap
@@ -97,19 +103,24 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
       center={{ lat: 35.681236, lng: 139.767125 }}
       zoom={15}
       onLoad={onLoad}
+      onUnmount={onUnmount} // クリーンアップを追加
       options={{
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
       }}
     >
-      {filteredToilets.map((toilet) => (
+      {/* ★修正: マップの準備ができてからマーカーを描画する */}
+      {map && filteredToilets.map((toilet) => (
         <MarkerF
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
           onClick={() => setSelectedToilet(toilet)}
-          // 駅トイレは紫
-          icon={toilet.is_station_toilet ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" : undefined}
+          icon={
+            toilet.is_station_toilet
+              ? "http://maps.google.com/mapfiles/ms/icons/purple-dot.png"
+              : undefined
+          }
         />
       ))}
 
