@@ -64,11 +64,6 @@ export default function Home() {
           <span className="text-lg font-bold px-4">🚽 すぐそこトイレ</span>
         </div>
         {/* ★修正: 管理者リンクを削除しました */}
-        {/* <div className="flex-none">
-           <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 font-medium px-3">
-             管理者
-           </Link>
-        </div> */}
       </header>
 
       {/* コントロールパネル */}
@@ -194,8 +189,6 @@ export default function Home() {
 
       {/* メインコンテンツ */}
       <div className="flex-1 relative overflow-hidden">
-        
-        {/* 現在地タブでも ToiletMap を表示する */}
         {activeTab === 'current' && (
           <div className="absolute inset-0">
             <ToiletMap 
