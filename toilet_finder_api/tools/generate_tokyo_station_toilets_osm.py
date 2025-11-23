@@ -19,27 +19,54 @@ TOKYO_STATIONS = [
     {"line": "小田急小田原線", "stations": ["新宿", "南新宿", "参宮橋", "代々木八幡", "代々木上原", "東北沢", "下北沢", "世田谷代田", "梅ヶ丘", "豪徳寺", "経堂", "千歳船橋", "祖師ヶ谷大蔵", "成城学園前"]},
 ]
 
-# 検索半径 (m) - 巨大駅対応のため広めに設定
-SEARCH_RADIUS = 800 
+# 検索半径 (m)
+SEARCH_RADIUS = 300 
+
+# ★追加: 東京近郊の境界ボックス (緯度経度の範囲)
+# この範囲外の検索結果は「間違い」として無視します
+TOKYO_BOUNDS = {
+    "lat_min": 35.0, "lat_max": 36.5,
+    "lon_min": 138.5, "lon_max": 141.0
+}
 
 # ---------------------------------------------------------
 # 2. API設定
 # ---------------------------------------------------------
-geolocator = Nominatim(user_agent="tokyo_toilet_collector_v3", timeout=10)
+geolocator = Nominatim(user_agent="tokyo_toilet_collector_v5_auto", timeout=10)
 geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1.5)
 
+def is_in_tokyo(lat, lon):
+    """ 座標が東京近郊の範囲内かチェック """
+    return (TOKYO_BOUNDS["lat_min"] <= lat <= TOKYO_BOUNDS["lat_max"] and
+            TOKYO_BOUNDS["lon_min"] <= lon <= TOKYO_BOUNDS["lon_max"])
+
 def get_station_location(station_name):
-    """ 駅の代表座標を取得 """
+    """ 駅の代表座標を取得 (範囲チェック付き) """
     try:
+        # 1. "駅"をつけて検索
         query = f"{station_name}駅 東京都"
         loc = geocode(query)
-        if loc:
+        if loc and is_in_tokyo(loc.latitude, loc.longitude):
             return loc.latitude, loc.longitude
+        
+        # 2. ヒットしなければ "駅" なしで再トライ
+        query_retry = f"{station_name} 東京都"
+        loc = geocode(query_retry)
+        if loc and is_in_tokyo(loc.latitude, loc.longitude):
+            return loc.latitude, loc.longitude
+
+        # 3. それでもダメなら、もっと具体的に「駅」だけで検索してみる（東京都を外す）
+        # ただし範囲チェックで京都などを弾く
+        query_broad = f"{station_name}駅"
+        loc = geocode(query_broad)
+        if loc and is_in_tokyo(loc.latitude, loc.longitude):
+            print(f"    -> 広域検索でヒット (範囲内): {loc.address}")
+            return loc.latitude, loc.longitude
+
     except: pass
     return None, None
 
 def fetch_osm_toilets(lat, lon, radius):
-    """ Overpass APIで周辺のトイレを取得 """
     url = "http://overpass-api.de/api/interpreter"
     query = f"""
     [out:json][timeout:25];
@@ -58,7 +85,7 @@ def fetch_osm_toilets(lat, lon, radius):
     return []
 
 def main():
-    print("=== 東京全駅トイレデータ収集 (強化版) を開始します ===")
+    print("=== 東京全駅トイレデータ収集 (自動補正版) を開始します ===")
     
     all_data = []
     processed_stations = set()
@@ -72,16 +99,19 @@ def main():
                 continue
             processed_stations.add(station)
 
-            # 1. 駅の場所を特定
-            lat, lon = get_station_location(station)
-            if not lat:
-                print(f"  [Skip] {station} (場所不明)")
+            # 1. 駅の場所を特定 (範囲チェック付き)
+            coords = get_station_location(station)
+            
+            if not coords:
+                print(f"  [Skip] {station} (場所が特定できませんでした)")
                 continue
+            
+            lat, lon = coords
 
             # 2. 周辺のトイレを検索
             elements = fetch_osm_toilets(lat, lon, SEARCH_RADIUS)
             
-            # 3. 見つからない場合、ダミーデータを作成 (品川対策)
+            # 3. 見つからない場合、ダミーデータを作成
             if not elements:
                 print(f"  [Warning] {station}: OSMデータなし -> 代表点を作成します")
                 fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{station}_駅トイレ_代表"))
@@ -94,7 +124,7 @@ def main():
                     "lat": lat,
                     "lon": lon,
                     "wheelchair": "○", 
-                    "baby_chair": "○", # 便宜上ありにしておく
+                    "baby_chair": "○", 
                     "ostomate": "",
                     "opening_hours": "始発〜終電",
                     "notes": "駅中心座標(詳細位置不明)"
