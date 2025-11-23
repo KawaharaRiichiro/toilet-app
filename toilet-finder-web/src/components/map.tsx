@@ -1,124 +1,128 @@
 "use client";
 
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from "@react-google-maps/api";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useEffect } from 'react';
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
 
-const libraries: ("places" | "geometry")[] = ["places", "geometry"];
-
-const mapContainerStyle = {
+// --- 設定 ---
+const containerStyle = {
   width: '100%',
-  height: '100%',
+  height: '100vh'
 };
 
-// 地図の文字を大きくするスタイル設定
-const mapStyles = [
-  {
-    featureType: "all",
-    elementType: "labels.text",
-    stylers: [
-      { scale: 4 } // 文字の太さ・大きさを調整（通常は1～8くらい）
-    ]
-  }
-];
+// 初期表示位置 (東京駅周辺)
+const defaultCenter = {
+  lat: 35.681236,
+  lng: 139.767125
+};
 
-type Toilet = {
+// --- 型定義 ---
+interface Toilet {
   id: string;
   name: string;
-  address: string | null;
   latitude: number;
   longitude: number;
+  address?: string;
   is_station_toilet: boolean;
-  opening_hours: string | null;
-  availability_notes: string | null;
-  is_wheelchair_accessible: boolean;
-  has_diaper_changing_station: boolean;
-  is_ostomate_accessible: boolean;
-  inside_gate: boolean | null;
-};
+  opening_hours?: string;
+  availability_notes?: string;
+  is_wheelchair_accessible?: boolean;
+  has_diaper_changing_station?: boolean;
+  is_ostomate_accessible?: boolean;
+}
 
-type ToiletMapProps = {
-  filters: {
-    wheelchair: boolean;
-    diaper: boolean;
-    ostomate: boolean;
-    inside_gate: boolean | null;
-  };
-};
-
-export default function ToiletMap({ filters }: ToiletMapProps) {
-  const [toilets, setToilets] = useState<Toilet[]>([]);
-  const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
-
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    language: "ja",
-    libraries: libraries,
+export default function Map() {
+  // 1. Google Maps APIのロード
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    // .env.local に NEXT_PUBLIC_GOOGLE_MAPS_API_KEY を設定してください
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "" 
   });
 
-  const defaultCenter = useMemo(() => ({ lat: 35.681236, lng: 139.767125 }), []);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [toilets, setToilets] = useState<Toilet[]>([]);
+  const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
+  const [center, setCenter] = useState(defaultCenter);
 
-  // フィルタリング処理
-  const filteredToilets = useMemo(() => {
-    return toilets.filter((t) => {
-      if (filters?.wheelchair && !t.is_wheelchair_accessible) return false;
-      if (filters?.diaper && !t.has_diaper_changing_station) return false;
-      if (filters?.ostomate && !t.is_ostomate_accessible) return false;
-      if (filters?.inside_gate !== null && filters?.inside_gate !== undefined) {
-         if (t.inside_gate !== filters.inside_gate) return false;
-      }
-      return true;
-    });
-  }, [toilets, filters]);
+  // 2. APIからトイレデータを取得する関数
+  const fetchToilets = async (lat: number, lng: number) => {
+    try {
+      // バックエンドの正しいエンドポイント (/toilets/nearby) を呼び出す
+      const res = await fetch(`http://127.0.0.1:8000/toilets/nearby?lat=${lat}&lng=${lng}`);
+      if (!res.ok) throw new Error('API Error');
+      const data = await res.json();
+      setToilets(data);
+    } catch (error) {
+      console.error("トイレデータの取得に失敗:", error);
+    }
+  };
 
-  useEffect(() => {
-    const fetchToilets = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/toilets?limit=5000`);
-        if (!res.ok) throw new Error('Failed to fetch toilets');
-        const data = await res.json();
-        setToilets(data as Toilet[]);
-      } catch (error) {
-        console.error("トイレデータの取得に失敗:", error);
-      }
-    };
-    fetchToilets();
-  }, [API_BASE_URL]);
-
+  // 3. マップがロードされた時の処理
   const onLoad = useCallback(function callback(map: google.maps.Map) {
-    const bounds = new google.maps.LatLngBounds();
-    bounds.extend(defaultCenter);
-    map.setCenter(defaultCenter);
-  }, [defaultCenter]);
+    setMap(map);
+    // 現在地を取得して移動
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const newCenter = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          };
+          setCenter(newCenter);
+          map.panTo(newCenter);
+          fetchToilets(newCenter.lat, newCenter.lng);
+        },
+        () => {
+          // 現在地が取れない場合は初期位置で検索
+          fetchToilets(defaultCenter.lat, defaultCenter.lng);
+        }
+      );
+    } else {
+      fetchToilets(defaultCenter.lat, defaultCenter.lng);
+    }
+  }, []);
 
-  if (loadError) return <div className="h-full flex items-center justify-center text-red-500">地図エラー</div>;
-  if (!isLoaded) return <div className="h-full flex items-center justify-center text-gray-500">読み込み中...</div>;
+  const onUnmount = useCallback(function callback(map: google.maps.Map) {
+    setMap(null);
+  }, []);
+
+  // 4. 地図が移動・ズーム終了した時のイベント (onIdle)
+  const onIdle = () => {
+    if (map) {
+      const newCenter = map.getCenter();
+      if (newCenter) {
+        const lat = newCenter.lat();
+        const lng = newCenter.lng();
+        fetchToilets(lat, lng);
+      }
+    }
+  };
+
+  if (!isLoaded) return <div>Loading Map...</div>;
 
   return (
     <GoogleMap
-      mapContainerStyle={mapContainerStyle}
-      center={defaultCenter}
-      zoom={15}
+      mapContainerStyle={containerStyle}
+      center={center}
+      zoom={16}
       onLoad={onLoad}
+      onUnmount={onUnmount}
+      onIdle={onIdle} // 移動が終わったら再検索
       options={{
-        streetViewControl: false,
         mapTypeControl: false,
+        streetViewControl: false,
         fullscreenControl: false,
-        styles: mapStyles,
       }}
     >
-      {filteredToilets.map((toilet) => (
+      {toilets.map((toilet) => (
         <MarkerF
           key={toilet.id}
           position={{ lat: toilet.latitude, lng: toilet.longitude }}
           onClick={() => setSelectedToilet(toilet)}
-          // ★修正: HTTPSのURLに変更（紫：駅、赤：公衆）
+          // アイコンの出し分け (Google標準アイコンを使用)
           icon={{
             url: toilet.is_station_toilet
-              ? "https://maps.google.com/mapfiles/ms/icons/purple-dot.png"
-              : "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+              ? "http://maps.google.com/mapfiles/ms/icons/red-dot.png"  // 駅トイレ: 赤
+              : "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" // 公衆トイレ: 青
           }}
         />
       ))}
@@ -128,30 +132,51 @@ export default function ToiletMap({ filters }: ToiletMapProps) {
           position={{ lat: selectedToilet.latitude, lng: selectedToilet.longitude }}
           onCloseClick={() => setSelectedToilet(null)}
         >
-          <div className="p-2 min-w-[150px] text-black">
-            <h3 className="font-bold text-base mb-1 flex items-center">
-              {selectedToilet.is_station_toilet && <span className="mr-1 text-lg">🚉</span>}
+          <div style={{ minWidth: '200px', color: 'black' }}>
+            <h3 style={{ fontWeight: 'bold', marginBottom: '5px', fontSize: '16px' }}>
               {selectedToilet.name}
             </h3>
-            <p className="text-xs text-gray-600 mb-2">{selectedToilet.address}</p>
             
-            <div className="flex gap-1 flex-wrap mb-2">
-               {selectedToilet.is_wheelchair_accessible && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded">♿</span>}
-               {selectedToilet.has_diaper_changing_station && <span className="text-[10px] bg-pink-100 text-pink-800 px-1 rounded">👶</span>}
-               {selectedToilet.is_ostomate_accessible && <span className="text-[10px] bg-green-100 text-green-800 px-1 rounded">✚</span>}
+            <div style={{ marginBottom: '8px' }}>
+              <span style={{ 
+                backgroundColor: selectedToilet.is_station_toilet ? '#ef4444' : '#3b82f6',
+                color: 'white', 
+                padding: '2px 6px', 
+                borderRadius: '4px',
+                fontSize: '12px' 
+              }}>
+                {selectedToilet.is_station_toilet ? '駅トイレ' : '公衆トイレ'}
+              </span>
             </div>
-            
-            <a
-               href={`https://www.google.com/maps/search/?api=1&query=${selectedToilet.latitude},${selectedToilet.longitude}`}
-               target="_blank"
-               rel="noopener noreferrer"
-               className="btn btn-primary btn-sm w-full mt-2 text-white no-underline flex items-center justify-center"
-            >
-              ここへ行く
-            </a>
+
+            {selectedToilet.address && (
+              <p style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>
+                {selectedToilet.address}
+              </p>
+            )}
+
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '5px' }}>
+              {selectedToilet.is_wheelchair_accessible && <span style={tagStyle}>♿ 車椅子</span>}
+              {selectedToilet.has_diaper_changing_station && <span style={tagStyle}>👶 ベビー</span>}
+              {selectedToilet.is_ostomate_accessible && <span style={tagStyle}>✚ オストメイト</span>}
+            </div>
+
+            {selectedToilet.opening_hours && (
+              <p style={{ fontSize: '12px', borderTop: '1px solid #eee', paddingTop: '4px' }}>
+                🕒 {selectedToilet.opening_hours}
+              </p>
+            )}
           </div>
         </InfoWindowF>
       )}
     </GoogleMap>
   );
 }
+
+const tagStyle = {
+  border: '1px solid #ccc',
+  borderRadius: '4px',
+  padding: '1px 4px',
+  fontSize: '10px',
+  backgroundColor: '#f3f4f6'
+};
