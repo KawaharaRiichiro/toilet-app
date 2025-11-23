@@ -63,11 +63,12 @@ export default function Home() {
         <div className="flex-1">
           <span className="text-lg font-bold px-4">🚽 すぐそこトイレ</span>
         </div>
-        <div className="flex-none">
+        {/* ★修正: 管理者リンクを削除しました */}
+        {/* <div className="flex-none">
            <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 font-medium px-3">
              管理者
            </Link>
-        </div>
+        </div> */}
       </header>
 
       {/* コントロールパネル */}
@@ -125,7 +126,7 @@ export default function Home() {
                 <p className="text-xs text-gray-500 mt-1">{nearestInfo.address}</p>
               </div>
               
-              {/* ルート案内ボタン (青色強制) */}
+              {/* ルート案内ボタン */}
               <a 
                  href={`https://www.google.com/maps/dir/?api=1&destination=${nearestInfo.latitude},${nearestInfo.longitude}`}
                  target="_blank" 
@@ -148,7 +149,7 @@ export default function Home() {
         {/* 共通フィルター (乗車中以外で表示) */}
         {activeTab !== 'train' && (
           <div className="px-4 py-2 bg-white border-b border-gray-200 overflow-x-auto whitespace-nowrap">
-             <div className="flex items-center gap-6">
+              <div className="flex items-center gap-6">
                {/* 設備 */}
                <div className="flex items-center gap-2">
                  <span className="text-xs font-bold text-gray-500">設備:</span>
@@ -193,11 +194,15 @@ export default function Home() {
 
       {/* メインコンテンツ */}
       <div className="flex-1 relative overflow-hidden">
+        
+        {/* 現在地タブでも ToiletMap を表示する */}
         {activeTab === 'current' && (
-          <NearestToilet 
-            filters={filters} 
-            onUpdateNearest={(data: ToiletData | null) => setNearestInfo(data)} 
-          />
+          <div className="absolute inset-0">
+            <ToiletMap 
+              filters={filters} 
+              onUpdateNearest={(data: ToiletData | null) => setNearestInfo(data)} 
+            />
+          </div>
         )}
         
         {activeTab === 'train' && (
