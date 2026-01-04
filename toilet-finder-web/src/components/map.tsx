@@ -113,7 +113,8 @@ export default function MapComponent({ targetLocation }: MapProps) {
 
   // useSupercluster フックのための設定
   // ★重要: Vercelデプロイエラー (Type error: Object is possibly 'null') の修正箇所
-  // ?. を使って安全にアクセスし、undefined の可能性を許容します
+  // mapRef.current があっても getMap() が null を返す場合などを考慮し、
+  // ?. (オプショナルチェーン) を使って安全にアクセスします。
   const bounds = mapRef.current
     ? (mapRef.current.getMap()?.getBounds()?.toArray().flat() as [number, number, number, number] | undefined)
     : undefined;
