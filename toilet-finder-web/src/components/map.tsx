@@ -144,11 +144,18 @@ export default function MapComponent({ targetLocation }: MapProps) {
                 longitude={longitude}
                 latitude={latitude}
                 onClick={() => {
-                  // ★修正: supercluster?. とオプショナルチェーンを使用し、nullの場合はデフォルト値(20)を使う
+                  const clusterId = cluster.id;
+                  
+                  // ★修正: 型エラー回避のため、clusterIdが数値であることを確認
+                  if (!supercluster || typeof clusterId !== 'number') {
+                    return;
+                  }
+
                   const expansionZoom = Math.min(
-                    supercluster?.getClusterExpansionZoom(cluster.id) ?? 20,
+                    supercluster.getClusterExpansionZoom(clusterId),
                     20
                   );
+
                   setViewState({
                     ...viewState,
                     latitude,
