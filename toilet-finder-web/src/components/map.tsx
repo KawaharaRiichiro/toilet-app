@@ -39,10 +39,8 @@ export default function MapComponent({ targetLocation }: MapProps) {
   const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 地図の言語設定プラグイン
   const onMapLoad = useCallback((e: any) => {
     const map = e.target;
-    // 日本語化
     if (map) {
        try {
          const language = new MapboxLanguage({ defaultLanguage: 'ja' });
@@ -53,7 +51,6 @@ export default function MapComponent({ targetLocation }: MapProps) {
     }
   }, []);
 
-  // ターゲット変更時に移動
   useEffect(() => {
     if (targetLocation) {
       setViewState(prev => ({
@@ -61,9 +58,7 @@ export default function MapComponent({ targetLocation }: MapProps) {
         latitude: targetLocation.lat,
         longitude: targetLocation.lng,
         zoom: targetLocation.zoom || 15,
-        // transitionDuration: 1000 // react-map-gl v7+のviewState管理では手動制御が必要な場合あり
       }));
-      // mapRef経由でflyToを使うとよりスムーズ
       mapRef.current?.flyTo({
         center: [targetLocation.lng, targetLocation.lat],
         zoom: targetLocation.zoom || 15,
@@ -72,17 +67,11 @@ export default function MapComponent({ targetLocation }: MapProps) {
     }
   }, [targetLocation]);
 
-  // データをロード
   useEffect(() => {
     const fetchPoints = async () => {
       setLoading(true);
       try {
-        // APIからデータを取得する処理を想定
-        // const res = await fetch(`${API_BASE_URL}/toilets`);
-        // const data = await res.json();
-        
-        // モックデータ (APIがまだない場合のフォールバック)
-        // 本番APIが実装されたら切り替えてください
+        // 本番環境ではAPIから取得する想定（現在はモック）
         const mockPoints = Array.from({ length: 50 }).map((_, i) => ({
           type: 'Feature',
           properties: {
@@ -111,10 +100,6 @@ export default function MapComponent({ targetLocation }: MapProps) {
     fetchPoints();
   }, []);
 
-  // useSupercluster フックのための設定
-  // ★重要: Vercelデプロイエラー (Type error: Object is possibly 'null') の修正箇所
-  // mapRef.current があっても getMap() が null を返す場合などを考慮し、
-  // ?. (オプショナルチェーン) を使って安全にアクセスします。
   const bounds = mapRef.current
     ? (mapRef.current.getMap()?.getBounds()?.toArray().flat() as [number, number, number, number] | undefined)
     : undefined;
@@ -140,7 +125,6 @@ export default function MapComponent({ targetLocation }: MapProps) {
         onMove={evt => setViewState(evt.viewState)}
         onLoad={onMapLoad}
         style={{ width: '100%', height: '100%' }}
-        // styleUrl は mapStyle に変更されています (v7)
         mapStyle="mapbox://styles/mapbox/streets-v12"
         mapboxAccessToken={MAPBOX_TOKEN}
         maxZoom={20}
@@ -149,7 +133,6 @@ export default function MapComponent({ targetLocation }: MapProps) {
         <NavigationControl position="bottom-right" />
         <GeolocateControl position="top-right" trackUserLocation />
 
-        {/* クラスターとマーカーの描画 */}
         {clusters.map((cluster) => {
           const [longitude, latitude] = cluster.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } = cluster.properties;
@@ -161,8 +144,9 @@ export default function MapComponent({ targetLocation }: MapProps) {
                 longitude={longitude}
                 latitude={latitude}
                 onClick={() => {
+                  // ★修正: supercluster?. とオプショナルチェーンを使用し、nullの場合はデフォルト値(20)を使う
                   const expansionZoom = Math.min(
-                    supercluster.getClusterExpansionZoom(cluster.id),
+                    supercluster?.getClusterExpansionZoom(cluster.id) ?? 20,
                     20
                   );
                   setViewState({
@@ -193,7 +177,6 @@ export default function MapComponent({ targetLocation }: MapProps) {
             );
           }
 
-          // 個別のマーカー
           return (
             <Marker
               key={`toilet-${cluster.properties.toiletId}`}
