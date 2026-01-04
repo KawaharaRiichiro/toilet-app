@@ -1,8 +1,8 @@
 import os
 from typing import List, Optional
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import math
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body, Depends
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -41,13 +41,15 @@ class PredictionResult(BaseModel):
     target_car: float
     facility_type: str
     crowd_level: int = Field(default=3, description="混雑度(デフォルト3)")
+    realtime_crowd_level: Optional[float] = Field(default=None, description="リアルタイム混雑度(ユーザー投稿平均)")
     notes: Optional[str] = Field(default=None)
+    toilet_name: Optional[str] = Field(default=None, description="トイレの具体的な名称") # 追加
     platform_name: str = Field(default="ホーム", description="発着番線")
     message: str
     latitude: Optional[float] = Field(default=None, description="目的地緯度")
     longitude: Optional[float] = Field(default=None, description="目的地経度")
-    # ★追加: 位置情報の精度タイプ ('exact': トイレピンポイント, 'station': 駅代表点)
     location_type: str = Field(default="station", description="位置情報の精度")
+    toilet_id: Optional[str] = Field(default=None, description="トイレID")
 
 class LineInfo(BaseModel):
     id: str
@@ -56,6 +58,11 @@ class LineInfo(BaseModel):
     direction_1_name: str
     direction_minus_1_name: str
     max_cars: int = Field(default=10, description="最大号車数")
+
+class CongestionReport(BaseModel):
+    toilet_id: str
+    congestion_level: int = Field(..., ge=1, le=3, description="1:空き, 2:普通, 3:混雑")
+    user_id: Optional[str] = None # ログインしていればIDが入る
 
 # -----------------------------------------------------------------
 # ヘルパー関数
@@ -158,6 +165,7 @@ def get_lines(lat: Optional[float] = None, lng: Optional[float] = None):
                     s_lng = safe_float(st.get('lng') or st.get('lon') or st.get('longitude'))
                     
                     if s_lat != 0 and s_lng != 0:
+                        # 0.03度 約3km以内
                         dist = math.sqrt((s_lat - lat)**2 + (s_lng - lng)**2)
                         if dist < 0.03: 
                             nearby_station_ids.append(st['id'])
@@ -261,7 +269,7 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
                 if not st_res.data: continue
                 st_data = st_res.data
                 
-                # デフォルト: 駅の位置を設定し、タイプを'station'とする
+                # デフォルト: 駅の位置
                 dest_lat = safe_float(st_data.get('lat'))
                 dest_lng = safe_float(st_data.get('lng'))
                 location_type = "station"
@@ -289,8 +297,11 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
                         best_cand = cand
                 
                 wc, tc, fac, crd, msg = 99.0, 1.0, "調査中", 3, ""
+                realtime_crowd = None
                 notes = ""
+                toilet_name = None
                 platform = "ホーム"
+                toilet_id = None
                 
                 if best_cand:
                     raw_tc = best_cand.get('car_pos') or best_cand.get('target_car_number')
@@ -301,20 +312,36 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
                     notes = str(best_cand.get('route_memo') or best_cand.get('notes') or '')
                     raw_platform = best_cand.get('platform_name')
                     platform = str(raw_platform) if raw_platform else "ホーム"
+                    toilet_id = best_cand.get('target_toilet_id')
                     
-                    # トイレ固有の座標があれば上書きし、タイプを'exact'にする
-                    target_toilet_id = best_cand.get('target_toilet_id')
-                    if target_toilet_id:
+                    # トイレ固有の情報を取得
+                    if toilet_id:
                         try:
-                            t_res = supabase.table("toilets").select("lat, lng").eq("id", target_toilet_id).single().execute()
+                            # 座標・名称
+                            t_res = supabase.table("toilets").select("lat, lng, name").eq("id", toilet_id).single().execute()
                             if t_res.data:
                                 t_lat = safe_float(t_res.data.get('lat'))
                                 t_lng = safe_float(t_res.data.get('lng'))
+                                toilet_name = t_res.data.get('name') # トイレ名取得
                                 if t_lat != 0 and t_lng != 0:
                                     dest_lat = t_lat
                                     dest_lng = t_lng
-                                    location_type = "exact" # 正確な位置
-                        except Exception:
+                                    location_type = "exact"
+                            
+                            # リアルタイム混雑度
+                            reports = supabase.table("congestion_reports") \
+                                .select("congestion_level") \
+                                .eq("toilet_id", toilet_id) \
+                                .order("reported_at", desc=True) \
+                                .limit(5) \
+                                .execute()
+                            
+                            if reports.data:
+                                levels = [r['congestion_level'] for r in reports.data]
+                                realtime_crowd = sum(levels) / len(levels)
+                                
+                        except Exception as e:
+                            print(f"Sub query error: {e}")
                             pass
 
                 if wc < 0.5: msg = "降りてすぐ目の前！"
@@ -332,12 +359,15 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
                     "target_car": tc,
                     "facility_type": fac,
                     "crowd_level": crd,
+                    "realtime_crowd_level": round(realtime_crowd, 1) if realtime_crowd else None,
                     "notes": notes,
+                    "toilet_name": toilet_name, # 追加
                     "platform_name": platform,
                     "message": msg,
                     "latitude": dest_lat,
                     "longitude": dest_lng,
-                    "location_type": location_type # APIレスポンスに追加
+                    "location_type": location_type,
+                    "toilet_id": toilet_id
                 })
             except Exception as e:
                 traceback.print_exc()
@@ -348,3 +378,21 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
     except Exception as e:
         traceback.print_exc()
         return []
+
+@app.post("/report_congestion")
+def report_congestion(report: CongestionReport):
+    try:
+        data = {
+            "toilet_id": report.toilet_id,
+            "congestion_level": report.congestion_level,
+            "user_id": report.user_id if report.user_id else None
+        }
+        supabase.table("congestion_reports").insert(data).execute()
+        return {"status": "success", "message": "Report received"}
+    except Exception as e:
+        print(f"Report Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save report")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)

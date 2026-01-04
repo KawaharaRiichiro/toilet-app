@@ -6,7 +6,7 @@ import re
 # ファイルパス定義
 STATIONS_CSV = 'data/stations.csv'
 STRATEGIES_CSV = 'data/strategies.csv'
-# TOILET_MASTER_CSV = 'station_toilet.csv' # 廃止
+TOILET_MASTER_CSV = 'station_toilet.csv'
 
 # 出力ファイル設定
 OUTPUT_SQL_1 = '01_schema.sql'     # テーブル定義
@@ -39,12 +39,13 @@ PLATFORM_RULES = {
     "総武線": {1: "1番線", -1: "2番線"},
     "小田急小田原線": {1: "1番線", -1: "2番線"},
     "東急東横線": {1: "1番線", -1: "2番線"},
+    # 必要に応じて追加
 }
 
 def normalize_line_name(name: str) -> str:
     if not name: return ""
     normalized = str(name).strip()
-    prefixes = ["東京メトロ", "都営地下鉄", "都営", "JR", "東急", "小田急", "京王", "西武", "東武", "京急"]
+    prefixes = ["東京メトロ", "都営地下鉄", "都営", "JR", "東急", "小田急", "京王", "西武", "東武", "京急", "京成"]
     for p in prefixes:
         normalized = normalized.replace(p, "")
     if normalized.endswith("線"): normalized = normalized[:-1]
@@ -59,9 +60,14 @@ def get_platform_name_from_rules(line_name, direction):
             return PLATFORM_RULES[key].get(direction, "ホーム")
     return "ホーム"
 
+def get_max_cars_from_config(line_name):
+    # stations.csv から読み込むのが基本だが、ここでもデフォルト値を持てると安全
+    return 10
+
 def load_csv_safe(filepath):
     if not os.path.exists(filepath): return pd.DataFrame()
     try:
+        # BOM付きUTF-8やCP932などに対応
         df = pd.read_csv(filepath, dtype=str, encoding='utf-8-sig').fillna('')
         df.columns = df.columns.str.strip()
         return df
@@ -86,10 +92,16 @@ def save_sql_split(sql_statements, base_filename, max_lines=MAX_INSERTS_PER_FILE
             f.write("\n".join(chunk))
         print(f"  -> {filename} を生成しました ({len(chunk)}行)")
 
+def parse_bool(value):
+    """CSVの TRUE/FALSE 文字列を SQLの true/false に変換"""
+    if str(value).upper() == 'TRUE': return 'true'
+    return 'false'
+
 def generate_sql():
     print("CSVファイルを読み込んでいます...")
     df_st = load_csv_safe(STATIONS_CSV)
-    df_str = load_csv_safe(STRATEGIES_CSV) # 手動データのみ
+    df_tm = load_csv_safe(TOILET_MASTER_CSV) # 新しいフォーマットのトイレマスタ
+    df_str = load_csv_safe(STRATEGIES_CSV)
 
     if df_st.empty:
         print(f"エラー: {STATIONS_CSV} が読み込めないか、空です。")
@@ -98,16 +110,22 @@ def generate_sql():
     if 'station_order' in df_st.columns:
         df_st['station_order_int'] = pd.to_numeric(df_st['station_order'], errors='coerce').fillna(0).astype(int)
 
-    # 1. スキーマ定義
+    # ---------------------------------------------------------
+    # 1. スキーマ定義 (01_schema.sql)
+    # ---------------------------------------------------------
     sql_1 = [
         "DROP TABLE IF EXISTS toilet_strategies CASCADE;",
         "DROP TABLE IF EXISTS toilets CASCADE;",
         "DROP TABLE IF EXISTS line_stations CASCADE;",
         "DROP TABLE IF EXISTS stations CASCADE;",
         "DROP TABLE IF EXISTS lines CASCADE;",
+        "DROP TABLE IF EXISTS congestion_reports CASCADE;",
+        "DROP TABLE IF EXISTS profiles CASCADE;",
         "",
+        # マスタテーブル
         "CREATE TABLE public.lines (id uuid NOT NULL DEFAULT gen_random_uuid(), name text NOT NULL UNIQUE, color text, max_cars integer DEFAULT 10, PRIMARY KEY (id));",
         "CREATE TABLE public.stations (id uuid NOT NULL DEFAULT gen_random_uuid(), name text NOT NULL UNIQUE, lat double precision, lng double precision, PRIMARY KEY (id));",
+        
         """CREATE TABLE public.line_stations (
         line_id uuid REFERENCES public.lines(id) ON DELETE CASCADE,
         station_id uuid REFERENCES public.stations(id) ON DELETE CASCADE,
@@ -118,23 +136,59 @@ def generate_sql():
         dir_m1_next_station_id uuid REFERENCES public.stations(id),
         dir_m1_next_next_station_id uuid REFERENCES public.stations(id),
         PRIMARY KEY (line_id, station_id));""",
+        
+        # ★修正: toilets テーブル (新しいCSVに合わせて拡張)
         """CREATE TABLE public.toilets (
-        id text NOT NULL, station_name text, floor text, lat double precision, lng double precision, description text, features text, PRIMARY KEY (id));""",
+        id text NOT NULL PRIMARY KEY,
+        station_name text,
+        line_name text,
+        name text, -- toilet_name
+        lat double precision,
+        lng double precision,
+        floor text,
+        wheelchair boolean DEFAULT false,
+        baby_chair boolean DEFAULT false,
+        ostomate boolean DEFAULT false,
+        description text, -- notes
+        platform_name text -- CSVにあるplatform_name(場所の詳細など)
+        );""",
+        
         """CREATE TABLE public.toilet_strategies (
         id uuid NOT NULL DEFAULT gen_random_uuid(), line_name text, station_id uuid REFERENCES public.stations(id) ON DELETE CASCADE,
         direction integer, platform_name text, car_pos double precision, facility_type text, available_time text,
-        crowd_level integer, target_toilet_id text, route_memo text, PRIMARY KEY (id));""",
+        crowd_level integer, target_toilet_id text REFERENCES public.toilets(id) ON DELETE SET NULL, route_memo text, PRIMARY KEY (id));""",
+        
+        # ユーザー系テーブル
+        """CREATE TABLE public.profiles (
+        id uuid REFERENCES auth.users ON DELETE CASCADE,
+        is_premium boolean DEFAULT false,
+        updated_at timestamp with time zone DEFAULT now(),
+        PRIMARY KEY (id));""",
+
+        """CREATE TABLE public.congestion_reports (
+        id uuid NOT NULL DEFAULT gen_random_uuid(),
+        toilet_id text REFERENCES public.toilets(id) ON DELETE CASCADE,
+        congestion_level integer NOT NULL,
+        user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+        reported_at timestamp with time zone DEFAULT now(),
+        PRIMARY KEY (id));""",
+
+        # RLS設定
         "ALTER TABLE public.lines DISABLE ROW LEVEL SECURITY;",
         "ALTER TABLE public.stations DISABLE ROW LEVEL SECURITY;",
         "ALTER TABLE public.line_stations DISABLE ROW LEVEL SECURITY;",
         "ALTER TABLE public.toilets DISABLE ROW LEVEL SECURITY;",
-        "ALTER TABLE public.toilet_strategies DISABLE ROW LEVEL SECURITY;"
+        "ALTER TABLE public.toilet_strategies DISABLE ROW LEVEL SECURITY;",
+        "ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;",
+        "ALTER TABLE public.congestion_reports DISABLE ROW LEVEL SECURITY;"
     ]
     with open(OUTPUT_SQL_1, 'w', encoding='utf-8') as f:
         f.write("\n".join(sql_1))
     print(f"  -> {OUTPUT_SQL_1} を生成しました ({len(sql_1)}行)")
 
-    # 2. 駅・路線データ
+    # ---------------------------------------------------------
+    # 2. 駅・路線データ (02_stations.sql)
+    # ---------------------------------------------------------
     sql_2 = []
     
     # lines
@@ -146,22 +200,17 @@ def generate_sql():
             line_id = str(uuid.uuid4())
             line_map[line] = line_id
             
-            # line_name に対応する行を取得
             line_rows = df_st[df_st['line_name'] == line]
-            
-            # color の取得
             color = '#808080'
             if not line_rows.empty:
                 color = line_rows.iloc[0]['line_color']
             
-            # max_cars の取得 (CSVから読み込む)
             max_cars = 10
             if 'max_cars' in df_st.columns and not line_rows.empty:
                 try:
                     val = line_rows.iloc[0]['max_cars']
                     max_cars = int(val) if pd.notnull(val) and str(val).isdigit() else 10
-                except:
-                    max_cars = 10
+                except: pass
             
             sql_2.append(f"INSERT INTO lines (id, name, color, max_cars) VALUES ('{line_id}', '{line}', '{color}', {max_cars}) ON CONFLICT (name) DO UPDATE SET color = EXCLUDED.color, max_cars = EXCLUDED.max_cars;")
     
@@ -207,8 +256,7 @@ def generate_sql():
                 l_id = line_map.get(line_name)
                 s_id = station_map.get(row['station_name'])
                 
-                if not l_id or not s_id:
-                    continue
+                if not l_id or not s_id: continue
 
                 order = int(row['station_order_int'])
                 d1 = row.get('dir_1_label', '')
@@ -238,33 +286,70 @@ def generate_sql():
     
     save_sql_split(sql_2_ls, '02_stations', max_lines=500)
 
-    # 3. 攻略データ (strategies.csv のみ使用)
+    # ---------------------------------------------------------
+    # 3. 攻略データ (03_strategies.sql)
+    # ---------------------------------------------------------
     sql_3 = []
-    sql_3.append("-- 3. 攻略・トイレデータ登録 (strategies.csvベース)")
+    sql_3.append("-- 3. トイレマスタ & 攻略データ登録")
     
     # 登録済みトイレID管理用
     registered_toilet_ids = set()
 
+    # (A) 新しい station_toilet.csv を正として toilets テーブルに登録
+    if not df_tm.empty and 'id' in df_tm.columns:
+        for _, row in df_tm.iterrows():
+            t_id = row['id']
+            if not t_id: continue
+            
+            s_name = row.get('station_name', '').replace("'", "''")
+            l_name = row.get('line_name', '').replace("'", "''")
+            t_name = row.get('toilet_name', '').replace("'", "''")
+            floor = row.get('floor', '').replace("'", "''")
+            
+            lat = row.get('lat', 'NULL')
+            lng = row.get('lng', 'NULL')
+            if not lat or lat == 'nan': lat = 'NULL'
+            if not lng or lng == 'nan': lng = 'NULL'
+            
+            wheelchair = parse_bool(row.get('wheelchair', 'FALSE'))
+            baby_chair = parse_bool(row.get('baby_chair', 'FALSE'))
+            ostomate = parse_bool(row.get('ostomate', 'FALSE'))
+            
+            desc = row.get('notes', '').replace("'", "''")
+            plat_name = row.get('platform_name', '').replace("'", "''") # 詳細場所
+
+            # INSERT
+            sql_3.append(
+                f"INSERT INTO toilets (id, station_name, line_name, name, lat, lng, floor, wheelchair, baby_chair, ostomate, description, platform_name) "
+                f"VALUES ('{t_id}', '{s_name}', '{l_name}', '{t_name}', {lat}, {lng}, '{floor}', {wheelchair}, {baby_chair}, {ostomate}, '{desc}', '{plat_name}') "
+                f"ON CONFLICT (id) DO UPDATE SET station_name = EXCLUDED.station_name, description = EXCLUDED.description, wheelchair = EXCLUDED.wheelchair, baby_chair = EXCLUDED.baby_chair, ostomate = EXCLUDED.ostomate;"
+            )
+            registered_toilet_ids.add(t_id)
+
+    # (B) strategies.csv を toilet_strategies に登録
     if not df_str.empty and 'line_name' in df_str.columns:
         for _, row in df_str.iterrows():
             line_name = row['line_name']
             s_name = row['station_name'].replace("'", "''")
             
-            # toiletsテーブルへの登録
-            # strategies.csv に target_toilet_id があればそれを使う、なければ新規UUID発行
             t_id = row.get('target_toilet_id', '')
-            if not t_id or t_id == 'nan':
-                t_id = str(uuid.uuid4())
             
-            # 重複登録防止
-            if t_id not in registered_toilet_ids:
-                # 手動データには緯度経度や詳細がない場合が多いのでデフォルト値
-                # 将来的にAIで生成したテキストを 'description' に入れるなどの拡張が可能
+            # strategies.csv の ID が toilets テーブルに存在しない場合、
+            # 外部キー制約エラーになるため、本来はマスタ(station_toilet.csv)に追加すべきだが、
+            # 安全策として仮のトイレレコードを作成しておく（外部キーエラー回避）
+            if t_id and t_id != 'nan' and t_id not in registered_toilet_ids:
                 desc = str(row.get('route_memo', row.get('note', ''))).replace("'", "''")
-                sql_3.append(f"INSERT INTO toilets (id, station_name, floor, lat, lng, description, features) VALUES ('{t_id}', '{s_name}', '', NULL, NULL, '{desc}', '') ON CONFLICT (id) DO UPDATE SET description = EXCLUDED.description;")
+                # 仮登録 (詳細は不明なのでデフォルト値)
+                sql_3.append(
+                    f"INSERT INTO toilets (id, station_name, line_name, name, description) "
+                    f"VALUES ('{t_id}', '{s_name}', '{line_name}', '登録済みトイレ', '{desc}') "
+                    f"ON CONFLICT (id) DO NOTHING;"
+                )
                 registered_toilet_ids.add(t_id)
+            
+            t_id_val = f"'{t_id}'" if (t_id and t_id != 'nan') else "NULL"
 
-            # toilet_strategiesへの登録
+            # 攻略データ登録
             direction = int(row.get('direction', '1'))
             car_pos = row.get('car_pos', '0.0')
             fac = row.get('facility', '調査中')
@@ -279,7 +364,7 @@ def generate_sql():
             
             sql_3.append(
                 f"INSERT INTO toilet_strategies (line_name, station_id, direction, platform_name, car_pos, facility_type, available_time, crowd_level, target_toilet_id, route_memo) "
-                f"SELECT '{line_name}', id, {direction}, '{platform}', {car_pos}, '{fac}', '{avail}', {crowd}, '{t_id}', '{memo}' "
+                f"SELECT '{line_name}', id, {direction}, '{platform}', {car_pos}, '{fac}', '{avail}', {crowd}, {t_id_val}, '{memo}' "
                 f"FROM stations WHERE name = '{s_name}' LIMIT 1;"
             )
 
