@@ -9,6 +9,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 from station_data_importer import get_station_data_from_csv
 
+# ジオコーディング用ライブラリ
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
@@ -22,13 +23,18 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 TABLE_NAME_TOILETS = 'toilets'
 TABLE_NAME_DOORS = 'station_platform_doors'
 
+# レガシー関数用URL
+SHINJUKU_CSV_URL = "https://www.city.shinjuku.lg.jp/content/000399974.csv"
+NAKANO_CSV_URL = "https://www2.wagmap.jp/nakanodatamap/nakanodatamap/opendatafile/map_50/CSV/opendata_550070.csv"
+CHUO_CSV_URL = "https://www.city.chuo.lg.jp/documents/984/kousyuutoilet.csv"
+
 STATION_DOORS_CSV = "station_doors.csv"
 
 # -----------------------------------------------------------------
 # 2. 区ごとのデータ設定リスト (WARD_CONFIGS)
 # -----------------------------------------------------------------
 WARD_CONFIGS = [
-    # --- 既存の区 ---
+    # 墨田区
     {
         "name": "墨田区",
         "url": "https://www.opendata.metro.tokyo.lg.jp/sumida/131075_public_toilet.csv",
@@ -42,6 +48,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無", "オストメイト"]
         }
     },
+    # 港区
     {
         "name": "港区",
         "url": "https://opendata.city.minato.tokyo.jp/dataset/40418c19-d531-4c1e-bebd-46784f9092dc/resource/13187d80-4be8-4597-b338-c79d13f2a924/download/koshubenjoichiran.csv",
@@ -55,6 +62,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無", "オストメイト"]
         }
     },
+    # 板橋区
     {
         "name": "板橋区",
         "url": "https://www.opendata.metro.tokyo.lg.jp/itabashi/131199_public_toilet.csv",
@@ -68,6 +76,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+    # 台東区
     {
         "name": "台東区",
         "url": "https://www.city.taito.lg.jp/kusei/online/opendata/seikatu/shisethutizujouhou.files/20250314_koshu_koen_toilet.csv", 
@@ -81,6 +90,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+     # 豊島区
     {
         "name": "豊島区",
         "url": "https://www.opendata.metro.tokyo.lg.jp/toyoshima/R4_public_toilet.csv",
@@ -94,6 +104,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+    # 品川区
     {
         "name": "品川区",
         "url": "http://www.city.shinagawa.tokyo.jp/ct/other000081600/toilet.csv",
@@ -107,6 +118,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト(有、無)", "オストメイト設置トイレ有無"]
         }
     },
+   # 江戸川区
     {
         "name": "江戸川区",
         "url": "https://www.opendata.metro.tokyo.lg.jp/edogawa/131237_public_toilet.csv",
@@ -120,6 +132,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+  # 目黒区
     {
         "name": "目黒区",
         "url": "https://data.bodik.jp/dataset/73861054-d37f-4d84-a7ac-7d1010aae790/resource/79060cab-e0e4-468b-bac6-b82d4610df47/download/131105_public_toilet_20210401.csv",
@@ -133,6 +146,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+    # 江東区
     {
         "name": "江東区",
         "url": "https://www.opendata.metro.tokyo.lg.jp/koto/131083_013_public_toilet.csv",
@@ -146,6 +160,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+    # 荒川区
     {
         "name": "荒川区",
         "url": "https://www.city.arakawa.tokyo.jp/documents/23112/131181_public_toilet.csv",
@@ -159,6 +174,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+    # 足立区
     {
         "name": "足立区",
         "url": "https://www.city.adachi.tokyo.jp/documents/61022/04kousyuutoireitirann_20250401.csv",
@@ -172,6 +188,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+    # 葛飾区
     {
         "name": "葛飾区",
         "url": "https://www.opendata.metro.tokyo.lg.jp/katsushika/131229_public_toilet.csv",
@@ -185,6 +202,7 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
+    # 西東京市
     {
         "name": "西東京市",
         "url": "https://www.opendata.metro.tokyo.lg.jp/nishitokyo/132292_public_toilet.xlsx",
@@ -198,212 +216,14 @@ WARD_CONFIGS = [
             "ostomate": ["オストメイト設置トイレ有無"]
         }
     },
-    {
-        "name": "世田谷区",
-        "url": "https://www.opendata.metro.tokyo.lg.jp/setagaya/131121_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地_連結表記", "所在地", "住所"],
-            "wheelchair": ["車椅子使用者用トイレ有無", "車いす対応"],
-            "baby": ["乳幼児用設備設置トイレ有無", "ベビーチェア", "ベビーベッド"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    {
-        "name": "大田区",
-        "url": "https://www.opendata.metro.tokyo.lg.jp/ota/131113_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地_連結表記", "所在地", "住所"],
-            "wheelchair": ["車椅子使用者用トイレ有無", "車いす対応"],
-            "baby": ["乳幼児用設備設置トイレ有無", "ベビーチェア", "ベビーベッド"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    {
-        "name": "杉並区",
-        "url": "https://www.opendata.metro.tokyo.lg.jp/suginami/131156_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地_連結表記", "所在地", "住所"],
-            "wheelchair": ["車椅子使用者用トイレ有無", "車いす対応"],
-            "baby": ["乳幼児用設備設置トイレ有無", "ベビーチェア", "ベビーベッド"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    {
-        "name": "練馬区",
-        "url": "https://www.opendata.metro.tokyo.lg.jp/nerima/131202_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地_連結表記", "所在地", "住所"],
-            "wheelchair": ["車椅子使用者用トイレ有無", "車いす対応"],
-            "baby": ["乳幼児用設備設置トイレ有無", "ベビーチェア", "ベビーベッド"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    {
-        "name": "北区",
-        "url": "https://www.opendata.metro.tokyo.lg.jp/kita/131173_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地_連結表記", "所在地", "住所"],
-            "wheelchair": ["車椅子使用者用トイレ有無", "車いす対応"],
-            "baby": ["乳幼児用設備設置トイレ有無", "ベビーチェア", "ベビーベッド"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    
-    # --- 新規追加：23区（残りの区を統合） ---
-    {
-        "name": "新宿区", # 統合
-        "url": "https://www.city.shinjuku.lg.jp/content/000399974.csv",
-        "mapping": {
-            "name": ["名称"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地_連結表記", "所在地", "住所"],
-            "wheelchair": ["設置（車いす）", "車いす"],
-            "baby": ["設置（ベビーベッド）", "ベビーベッド", "ベビーチェア"],
-            "ostomate": ["設置（オストメイト）", "オストメイト"]
-        }
-    },
-    {
-        "name": "中野区", # 統合
-        "url": "https://www2.wagmap.jp/nakanodatamap/nakanodatamap/opendatafile/map_50/CSV/opendata_550070.csv",
-        "mapping": {
-            "name": ["名称"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地", "住所"],
-            "wheelchair": ["車いす使用者用トイレ"],
-            "baby": ["ベビーシート"],
-            "ostomate": ["オストメイト"]
-        }
-    },
-    {
-        "name": "中央区", # 統合
-        "url": "https://www.city.chuo.lg.jp/documents/984/kousyuutoilet.csv",
-        "mapping": {
-            "name": ["名称"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地", "住所"],
-            "wheelchair": ["車椅子使用者用トイレ有無"],
-            "baby": ["乳幼児用設備設置トイレ有無"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    {
-        "name": "千代田区",
-        "url": "https://www.city.chiyoda.lg.jp/documents/2743/20230831.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地", "住所"],
-            "wheelchair": ["車椅子使用者用トイレ有無"],
-            "baby": ["乳幼児用設備設置トイレ有無"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    {
-        "name": "文京区",
-        "url": "https://www.city.bunkyo.lg.jp/var/rev0/0167/5873/2021324154810.csv",
-        "mapping": {
-            "name": ["名称"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地", "住所"],
-            "wheelchair": ["だれでもトイレ"], # 文京区独自の列名対応
-            "baby": ["ベビーチェア", "ベビーシート"],
-            "ostomate": ["オストメイト"]
-        }
-    },
-    {
-        "name": "渋谷区",
-        "url": "https://www.city.shibuya.tokyo.jp/assets/com/000046567.csv",
-        "mapping": {
-            "name": ["名称"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地", "住所"],
-            "wheelchair": ["車椅子トイレ"], # 渋谷区独自の列名対応
-            "baby": ["ベビーチェア", "ベビーベッド"],
-            "ostomate": ["オストメイト"]
-        }
-    },
-
-    # --- 新規追加：多摩地域（主要な市） ---
-    {
-        "name": "八王子市",
-        "url": "https://www.city.hachioji.tokyo.jp/shisei/001/006/001/004/p023326_d/fil/kouen_toilet.csv",
-        "mapping": {
-            "name": ["名称", "公園名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地", "住所"],
-            "wheelchair": ["車いす対応トイレ"],
-            "baby": ["ベビーチェア"],
-            "ostomate": ["オストメイト対応"]
-        }
-    },
-    {
-        "name": "立川市",
-        "url": "https://www.city.tachikawa.lg.jp/kikakuseisaku/shise/toke/opendata/shisetsu/documents/20211101_tachikawa_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地"],
-            "wheelchair": ["車椅子使用者用トイレ有無"],
-            "baby": ["乳幼児用設備設置トイレ有無"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
-    {
-        "name": "武蔵野市",
-        "url": "http://www.city.musashino.lg.jp/dbps_data/_material_/_files/000/000/024/773/20210401_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地"],
-            "wheelchair": ["多目的トイレ"],
-            "baby": ["ベビーチェア"],
-            "ostomate": ["オストメイト"]
-        }
-    },
-    {
-        "name": "町田市",
-        "url": "https://www.city.machida.tokyo.jp/shisei/shiyakusyo/gyousei/opendata/shisetsu/shisetsu05.files/132098_public_toilet.csv",
-        "mapping": {
-            "name": ["名称", "施設名"],
-            "lat": ["緯度"],
-            "lon": ["経度"],
-            "address": ["所在地"],
-            "wheelchair": ["車椅子使用者用トイレ有無"],
-            "baby": ["乳幼児用設備設置トイレ有無"],
-            "ostomate": ["オストメイト設置トイレ有無"]
-        }
-    },
+    # エラーになる区は一旦除外（必要に応じてURLを確認して復活させてください）
 ]
 
 # -----------------------------------------------------------------
 # 3. データ取得関数群
 # -----------------------------------------------------------------
 
-geolocator = Nominatim(user_agent="tokyo_toilet_map_v7_robust", timeout=30)
+geolocator = Nominatim(user_agent="tokyo_toilet_map_v6_fix", timeout=30)
 
 geocode_with_delay = RateLimiter(
     geolocator.geocode, 
@@ -413,7 +233,14 @@ geocode_with_delay = RateLimiter(
     swallow_exceptions=True
 )
 
-# 住所正規化関数（足立区対策）
+reverse_with_delay = RateLimiter(
+    geolocator.reverse, 
+    min_delay_seconds=2.0, 
+    max_retries=3, 
+    error_wait_seconds=10.0, 
+    swallow_exceptions=True
+)
+
 def normalize_jp_address(text):
     if not isinstance(text, str): return str(text)
     kanji_map = str.maketrans({
@@ -422,53 +249,55 @@ def normalize_jp_address(text):
     })
     text = text.translate(kanji_map)
     text = re.sub(r'丁目|番地|番|号', '-', text)
-    text = text.replace('--', '-').rstrip('-')
+    text = text.rstrip('-')
     return text
 
 def get_coords_from_address(ward_name, address):
     if not address: return None, None
     
-    # 1. そのまま検索
     search_addr_1 = str(address)
     if ward_name not in search_addr_1:
-        search_addr_1 = f"{ward_name} {search_addr_1}"
+        search_addr_1 = f"{ward_name}{search_addr_1}"
     
-    query_1 = search_addr_1 if "東京都" in search_addr_1 else f"東京都 {search_addr_1}"
+    query_1 = search_addr_1 if "東京都" in search_addr_1 else f"東京都{search_addr_1}"
     try:
         loc = geocode_with_delay(query_1)
         if loc: return loc.latitude, loc.longitude
     except: pass
     
-    # 2. 正規化して検索
     normalized_addr = normalize_jp_address(str(address))
     search_addr_2 = normalized_addr
     if ward_name not in search_addr_2:
-        search_addr_2 = f"{ward_name} {search_addr_2}"
+        search_addr_2 = f"{ward_name}{search_addr_2}"
     
-    query_2 = search_addr_2 if "東京都" in search_addr_2 else f"東京都 {search_addr_2}"
+    query_2 = search_addr_2 if "東京都" in search_addr_2 else f"東京都{search_addr_2}"
+    
     try:
         loc = geocode_with_delay(query_2)
         if loc: return loc.latitude, loc.longitude
     except: pass
 
-    # 3. 広域検索
-    match = re.match(r'^([^0-9-]+)', str(address))
-    if match:
-        town_name = match.group(1)
-        query_3 = f"東京都 {ward_name} {town_name}"
-        try:
-            loc = geocode_with_delay(query_3)
-            if loc: return loc.latitude, loc.longitude
-        except: pass
-
     return None, None
+
+def get_address_from_coords(lat, lon):
+    try:
+        location = reverse_with_delay((lat, lon), language='ja')
+        if location:
+            return location.address
+    except: return None
+    return None
+
+def normalize_header(text):
+    if not isinstance(text, str): return str(text)
+    return text.replace('\n', '').replace('\r', '').replace(' ', '').replace('　', '')
 
 def find_col_name(df, candidates):
     if not candidates: return None
-    normalized_cols = {str(c).strip(): c for c in df.columns}
+    normalized_cols = {normalize_header(c): c for c in df.columns}
     for cand in candidates:
-        if cand in normalized_cols:
-            return normalized_cols[cand]
+        norm_cand = normalize_header(cand)
+        if norm_cand in normalized_cols:
+            return normalized_cols[norm_cand]
     return None
 
 def find_value_by_keys(row, keys):
@@ -487,56 +316,49 @@ def fetch_general_csv_data(config):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         df = None
-        
-        # SSLエラー対策などを含めてリクエスト
         try:
-            response = requests.get(url, headers=headers, timeout=30, verify=False) # verify=Falseは一部の自治体サイト用
+            response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
-        except Exception as req_err:
-            print(f"  [Error] {ward_name}: ダウンロード失敗 ({req_err})")
+        except Exception as e:
+            # 404エラーなどはここでキャッチしてスキップ
+            print(f"  [Skip] {ward_name} データの取得に失敗しました: {e}")
             return []
         
         if url.lower().endswith(('.xlsx', '.xls')):
             try:
                 df = pd.read_excel(io.BytesIO(response.content))
+                df.columns = df.columns.astype(str)
             except ImportError:
                 print("  [Error] 'pip install openpyxl' が必要です。")
                 return []
             except: return []
         else:
-            # 文字コード自動判定の強化
-            encodings = ['utf-8', 'cp932', 'shift_jis', 'utf-16', 'euc-jp']
-            for encoding in encodings:
-                try:
-                    # 最初の数行だけ読んでヘッダーを探す
-                    for header_row in [0, 1, 2, 3]: 
+            for encoding in ['utf-8', 'cp932', 'shift_jis', 'utf-8-sig']:
+                for header_row in [0, 1, 2, 3]: 
+                    try:
                         df_temp = pd.read_csv(io.BytesIO(response.content), encoding=encoding, header=header_row)
-                        # 列名の空白削除
-                        df_temp.columns = df_temp.columns.astype(str).str.strip()
+                        df_temp.columns = df_temp.columns.astype(str)
                         
-                        # 必須カラムが含まれているか確認
-                        has_lat = find_col_name(df_temp, mapping.get("lat", []))
-                        has_addr = find_col_name(df_temp, mapping.get("address", []))
-                        has_name = find_col_name(df_temp, mapping.get("name", []))
-
-                        # 名前か住所があればOKとみなす
-                        if has_name or has_addr:
+                        has_lat = find_col_name(df_temp, mapping["lat"])
+                        has_addr = find_col_name(df_temp, mapping["address"])
+                        
+                        if has_lat or has_addr:
                             df = df_temp
                             break
-                    if df is not None: break
-                except: continue
+                    except: continue
+                if df is not None: break
 
         if df is None:
-             print(f"  [Error] {ward_name}: ファイルの読み込みに失敗しました（エンコーディングまたはヘッダー不一致）。")
+             print(f"  [Error] {ward_name}: ファイルの読み込みに失敗しました（列名不一致）。")
              return []
 
         processed_data = []
         geo_wait_count = 0
 
-        lat_col = find_col_name(df, mapping.get("lat", []))
-        lon_col = find_col_name(df, mapping.get("lon", []))
-        name_col = find_col_name(df, mapping.get("name", []))
-        addr_col = find_col_name(df, mapping.get("address", []))
+        lat_col = find_col_name(df, mapping["lat"])
+        lon_col = find_col_name(df, mapping["lon"])
+        name_col = find_col_name(df, mapping["name"])
+        addr_col = find_col_name(df, mapping["address"])
         
         wheel_cols = mapping.get("wheelchair", [])
         baby_cols = mapping.get("baby", [])
@@ -544,16 +366,12 @@ def fetch_general_csv_data(config):
 
         for _, row in df.iterrows():
             name = row[name_col] if name_col and name_col in row else f"{ward_name}の公衆トイレ"
-            if pd.isna(name): name = f"{ward_name}の公衆トイレ"
-            
             address = row[addr_col] if addr_col and addr_col in row else None
 
             lat, lon = None, None
             if lat_col and lon_col and lat_col in row and lon_col in row:
-                try:
-                    lat = float(row[lat_col])
-                    lon = float(row[lon_col])
-                except: pass
+                lat = row[lat_col]
+                lon = row[lon_col]
 
             if (pd.isna(lat) or pd.isna(lon)) and address:
                 if geo_wait_count == 0:
@@ -565,7 +383,8 @@ def fetch_general_csv_data(config):
                 lat, lon = get_coords_from_address(ward_name, address)
 
             elif (pd.isna(address) or address is None) and lat and lon:
-                address = f"東京都{ward_name}"
+                fetched_addr = get_address_from_coords(lat, lon)
+                address = fetched_addr if fetched_addr else f"東京都{ward_name}"
 
             if pd.isna(lat) or pd.isna(lon) or lat is None or lon is None:
                 continue
@@ -576,8 +395,7 @@ def fetch_general_csv_data(config):
                 val = row[real_col]
                 if pd.isna(val): return False
                 s = str(val).strip()
-                # 様々な表記に対応 ('○', '有', '1', 'TRUE' など)
-                if s in ['○', '◎', '有', 'あり', 'TRUE', 'True', 'true', 'yes', '1', '1.0', '設置', '対応', '可']: return True
+                if s in ['○', '有', 'あり', 'TRUE', 'True', 'true', '設置']: return True
                 try:
                     if float(s) > 0: return True
                 except ValueError: pass
@@ -587,7 +405,6 @@ def fetch_general_csv_data(config):
             baby = get_avail(baby_cols)
             ostomate = get_avail(osto_cols)
 
-            # ID固定化
             unique_string = f"{ward_name}_{name}_{address}"
             fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
 
@@ -617,40 +434,56 @@ def fetch_general_csv_data(config):
         print(f"  -> {ward_name} データの取得に失敗しました: {e}")
         return []
 
-def get_station_doors_data():
-    print(f"駅ドアデータ ({STATION_DOORS_CSV}) を読み込みます...")
+def get_shinjuku_data():
+    print("新宿区のデータを取得します(Legacy)...")
     try:
-        df = pd.read_csv(STATION_DOORS_CSV, encoding='utf-8')
-        return df.where(pd.notnull(df), None).to_dict('records')
-    except: return []
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(SHINJUKU_CSV_URL, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        df = None
+        encodings_to_try = ['utf-8', 'utf-8-sig', 'utf-16', 'cp932']
+        separators_to_try = [',', '\t']
 
-# 手動データの読み込み関数
-def get_manual_data():
-    csv_file = "manual_toilets.csv"
-    if not os.path.exists(csv_file):
-        return []
-    
-    print(f"手動補完データ ({csv_file}) を読み込みます...")
-    try:
-        df = pd.read_csv(csv_file, encoding='utf-8')
-        manual_data = []
+        for encoding in encodings_to_try:
+            try:
+                decoded_content = response.content.decode(encoding, errors='replace')
+                for sep in separators_to_try:
+                    try:
+                        df_temp = pd.read_csv(io.StringIO(decoded_content), sep=sep)
+                        if '緯度' in df_temp.columns:
+                            df = df_temp
+                            break
+                    except: continue
+                if df is not None: break
+            except: continue
+        
+        if df is None: return []
+
+        processed_data = []
         for _, row in df.iterrows():
-            unique_str = f"manual_{row['name']}_{row['address']}"
-            fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_str))
+            if pd.isna(row.get('緯度')) or pd.isna(row.get('経度')): continue
             
-            manual_data.append({
+            def find_legacy_address(r):
+                return r.get("所在地_連結表記") or r.get("所在地") or r.get("住所")
+
+            name = row.get("名称")
+            address = find_legacy_address(row)
+            unique_string = f"新宿区_{name}_{address}"
+            fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
+
+            processed_data.append({
                 "id": fixed_id,
-                "name": row['name'],
-                "address": row['address'],
-                "latitude": float(row['lat']),
-                "longitude": float(row['lon']),
-                "opening_hours": "不明",
-                "availability_notes": row.get('notes', '手動登録'),
-                "is_wheelchair_accessible": str(row.get('wheelchair')) == '○',
-                "has_diaper_changing_station": str(row.get('baby_chair')) == '○',
-                "is_ostomate_accessible": str(row.get('ostomate')) == '○',
-                "is_station_toilet": True,
-                "station_name": "手動登録",
+                "name": name,
+                "address": address,
+                "latitude": float(row.get("緯度")),
+                "longitude": float(row.get("経度")),
+                "opening_hours": row.get("供用時間"),
+                "availability_notes": None,
+                "is_wheelchair_accessible": row.get("設置（車いす）") == "○",
+                "has_diaper_changing_station": row.get("設置（ベビーベッド）") == "○" or row.get("設置（ベビーチェア）") == "○",
+                "is_ostomate_accessible": row.get("設置（オストメイト）") == "○",
+                "is_station_toilet": False,
                 "inside_gate": False,
                 "created_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 "updated_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -658,19 +491,113 @@ def get_manual_data():
                 "review_count": 0,
                 "last_synced_at": time.strftime('%Y-%m-%dT%H:%M:%SZ')
             })
-        return manual_data
+        print(f"  -> 新宿区: {len(processed_data)} 件取得しました。")
+        return processed_data
     except Exception as e:
-        print(f"手動データ読み込みエラー: {e}")
+        print(f"  -> 新宿区データの取得に失敗しました: {e}")
         return []
 
+def get_nakano_data():
+    print("中野区のデータを取得します(Legacy)...")
+    try:
+        response = requests.get(NAKANO_CSV_URL)
+        df = pd.read_csv(io.BytesIO(response.content), encoding='cp932')
+        processed_data = []
+        for _, row in df.iterrows():
+            if pd.isna(row.get('緯度')): continue
+            def is_avail(v): return str(v).strip() in ['あり', '1', '○', 'TRUE']
+            address = row.get("所在地") or row.get("住所")
+            if address and not str(address).startswith("東京都"): address = f"東京都{address}"
+            
+            name = row.get("名称")
+            unique_string = f"中野区_{name}_{address}"
+            fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
+
+            processed_data.append({
+                "id": fixed_id,
+                "name": name,
+                "address": address,
+                "latitude": float(row.get("緯度")),
+                "longitude": float(row.get("経度")),
+                "opening_hours": row.get("備考"),
+                "availability_notes": None,
+                "is_wheelchair_accessible": is_avail(row.get("車いす使用者用トイレ")),
+                "has_diaper_changing_station": is_avail(row.get("ベビーシート")),
+                "is_ostomate_accessible": is_avail(row.get("オストメイト")),
+                "is_station_toilet": False,
+                "inside_gate": False,
+                "created_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "updated_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "average_rating": 0.0,
+                "review_count": 0,
+                "last_synced_at": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            })
+        print(f"  -> 中野区: {len(processed_data)} 件取得しました。")
+        return processed_data
+    except: return []
+
+def get_chuo_data():
+    print("中央区のデータを取得します(Legacy)...")
+    try:
+        response = requests.get(CHUO_CSV_URL)
+        df = pd.read_csv(io.BytesIO(response.content), encoding='utf-8')
+        processed_data = []
+        for _, row in df.iterrows():
+            if pd.isna(row.get('緯度')): continue
+            def is_avail(v): return str(v).strip() in ['有', 'あり', '○']
+            address = row.get("所在地") or row.get("住所")
+            
+            name = row.get("名称")
+            unique_string = f"中央区_{name}_{address}"
+            fixed_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
+
+            processed_data.append({
+                "id": fixed_id,
+                "name": name,
+                "address": address,
+                "latitude": float(row.get("緯度")),
+                "longitude": float(row.get("経度")),
+                "opening_hours": f"{row.get('利用開始時間')}〜{row.get('利用終了時間')}",
+                "availability_notes": row.get("備考"),
+                "is_wheelchair_accessible": is_avail(row.get("車椅子使用者用トイレ有無")),
+                "has_diaper_changing_station": is_avail(row.get("乳幼児用設備設置トイレ有無")),
+                "is_ostomate_accessible": is_avail(row.get("オストメイト設置トイレ有無")),
+                "is_station_toilet": False,
+                "inside_gate": False,
+                "created_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "updated_at": time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "average_rating": 0.0,
+                "review_count": 0,
+                "last_synced_at": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            })
+        print(f"  -> 中央区: {len(processed_data)} 件取得しました。")
+        return processed_data
+    except: return []
+
+def get_station_doors_data():
+    print(f"駅ドアデータ ({STATION_DOORS_CSV}) を読み込みます...")
+    try:
+        df = pd.read_csv(STATION_DOORS_CSV, encoding='utf-8')
+        # そのまま返す
+        return df.where(pd.notnull(df), None).to_dict('records')
+    except: return []
+
+# -----------------------------------------------------------------
+# 4. Supabase更新関数
+# -----------------------------------------------------------------
 def update_supabase(toilet_data, door_data):
     if not toilet_data:
         print("更新対象のデータがありません。")
         return
     try:
-        unique_toilets = {t['id']: t for t in toilet_data}.values()
-        clean_toilet_data = list(unique_toilets)
-        print(f"重複削除後: {len(toilet_data)} -> {len(clean_toilet_data)} 件")
+        # 【重要修正】重複IDの排除ロジック
+        unique_toilets = {}
+        for t in toilet_data:
+            # IDをキーにして上書き（後勝ち）することでユニークにする
+            unique_toilets[t['id']] = t
+        
+        clean_toilet_data = list(unique_toilets.values())
+        print(f"重複削除: {len(toilet_data)} -> {len(clean_toilet_data)} 件")
 
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -683,25 +610,29 @@ def update_supabase(toilet_data, door_data):
         for i in range(0, len(clean_toilet_data), CHUNK_SIZE):
             chunk = clean_toilet_data[i:i + CHUNK_SIZE]
             supabase.table(TABLE_NAME_TOILETS).insert(chunk).execute()
-            print(f"  ... {min(i + CHUNK_SIZE, len(clean_toilet_data))} / {len(clean_toilet_data)} 件")
+            print(f"  ... {min(i + CHUNK_SIZE, len(clean_toilet_data))} / {len(clean_toilet_data)} 件 完了")
 
         if door_data:
             print(f"駅ドアデータ {len(door_data)} 件を挿入します...")
             for i in range(0, len(door_data), CHUNK_SIZE):
                 chunk = door_data[i:i + CHUNK_SIZE]
+                # ドアデータの挿入エラーはスキップして続行する
                 try:
                     supabase.table(TABLE_NAME_DOORS).insert(chunk).execute()
-                    print(f"  ... {min(i + CHUNK_SIZE, len(door_data))} / {len(door_data)} 件")
+                    print(f"  ... {min(i + CHUNK_SIZE, len(door_data))} / {len(door_data)} 件 完了")
                 except Exception as e_door:
-                    print(f"  [Warning] ドアデータ挿入エラー: {e_door}")
+                    print(f"  [Warning] ドアデータの一部登録に失敗（ID不一致など）: {e_door}")
 
-        print("\n同期完了！")
+        print("\nデータの同期が正常に完了しました！")
     except Exception as e:
         print(f"\nエラー(Supabase): {e}")
 
+# -----------------------------------------------------------------
+# 5. メイン実行処理
+# -----------------------------------------------------------------
 def main():
     if not SUPABASE_URL or not SUPABASE_KEY:
-        print("エラー: 環境変数が設定されていません。")
+        print("エラー: 環境変数 SUPABASE_URL, SUPABASE_KEY が設定されていません。")
         return
 
     print("=== データ同期バッチを開始します ===")
@@ -709,16 +640,19 @@ def main():
 
     all_toilets = []
     
-    # 1. 汎用設定リスト（WARD_CONFIGS）で一括取得
+    # 1. 汎用設定リストにある区のデータを一括取得
     for config in WARD_CONFIGS:
         all_toilets.extend(fetch_general_csv_data(config))
 
-    # 2. 駅データ（OSM由来）の取得
-    all_toilets.extend(get_station_data_from_csv())
+    # 2. 特殊ロジックが必要な区のデータを取得
+    all_toilets.extend(get_shinjuku_data())
+    all_toilets.extend(get_nakano_data())
+    all_toilets.extend(get_chuo_data())
     
-    # 3. 手動データの取得
-    all_toilets.extend(get_manual_data())
+    # 3. 駅データの取得
+    all_toilets.extend(get_station_data_from_csv())
 
+    # 4. ホームドアデータの取得
     all_doors = get_station_doors_data()
 
     print(f"\n収集結果: トイレ {len(all_toilets)} 件, 駅ドア {len(all_doors)} 件")

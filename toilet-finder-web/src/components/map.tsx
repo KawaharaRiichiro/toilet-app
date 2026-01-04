@@ -1,212 +1,270 @@
-"use client";
+'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import Map, { Source, Layer, Marker, Popup, NavigationControl, GeolocateControl, MapRef } from 'react-map-gl';
+import useSupercluster from 'use-supercluster';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { MapPin, Navigation, Loader2 } from 'lucide-react'; // Loader2を追加
 
-const containerStyle = {
-  width: '100%',
-  height: '100%'
-};
+// @ts-ignore
+import MapboxLanguage from '@mapbox/mapbox-gl-language';
 
-const defaultCenter = {
-  lat: 35.681236,
-  lng: 139.767125
-};
-
-// 外部公開用の型定義（page.tsxでも使うため）
-export interface Toilet {
+type Toilet = {
   id: string;
   name: string;
-  latitude: number;
-  longitude: number;
-  address?: string;
-  is_station_toilet: boolean;
-  is_wheelchair_accessible?: boolean;
-  has_diaper_changing_station?: boolean;
-  is_ostomate_accessible?: boolean;
-  inside_gate?: boolean;
-  distance?: number; // 距離情報を追加
-}
+  lat: number;
+  lng: number;
+  details?: any;
+};
 
-// 親から受け取るプロパティ
-interface MapProps {
-  filters?: {
-    wheelchair: boolean;
-    diaper: boolean;
-    ostomate: boolean;
-    inside_gate: boolean | null;
-  };
-  // 最寄りトイレが見つかったら親に教える関数（任意）
-  onUpdateNearest?: (toilet: Toilet | null) => void;
-}
+type MapProps = {
+  targetLocation?: {
+    lat: number;
+    lng: number;
+    zoom?: number;
+  } | null;
+};
 
-// 2点間の距離を計算する関数 (Haversine formula)
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371e3; // 地球の半径 (m)
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c; // 距離 (m)
-}
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export default function Map({ filters, onUpdateNearest }: MapProps) {
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "" 
-  });
+const clusterLayer: any = {
+  id: 'clusters',
+  type: 'circle',
+  source: 'toilets',
+  filter: ['has', 'point_count'],
+  paint: {
+    'circle-color': ['step', ['get', 'point_count'], '#51bbd6', 10, '#f1f075', 50, '#f28cb1'],
+    'circle-radius': ['step', ['get', 'point_count'], 20, 10, 30, 50, 40]
+  }
+};
 
-  const [map, setMap] = useState<google.maps.Map | null>(null);
+const clusterCountLayer: any = {
+  id: 'cluster-counts',
+  type: 'symbol',
+  source: 'toilets',
+  filter: ['has', 'point_count'],
+  layout: {
+    'text-field': '{point_count_abbreviated}',
+    'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+    'text-size': 12
+  }
+};
+
+export default function MapComponent({ targetLocation }: MapProps) {
+  const mapRef = useRef<MapRef>(null);
+
   const [toilets, setToilets] = useState<Toilet[]>([]);
+  const [viewState, setViewState] = useState({
+    latitude: 35.681236,
+    longitude: 139.767125,
+    zoom: 14
+  });
   const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
-  const [center, setCenter] = useState(defaultCenter);
-  const [currentPos, setCurrentPos] = useState<{lat: number, lng: number} | null>(null);
 
-  // フィルタリング処理
-  const filteredToilets = toilets.filter(t => {
-    if (!filters) return true;
-    if (filters.wheelchair && !t.is_wheelchair_accessible) return false;
-    if (filters.diaper && !t.has_diaper_changing_station) return false;
-    if (filters.ostomate && !t.is_ostomate_accessible) return false;
-    if (filters.inside_gate !== null && t.inside_gate !== filters.inside_gate) return false;
-    return true;
+  // ★追加: 地図の準備完了状態を管理
+  const [isReady, setIsReady] = useState(false);
+
+  // 日本語化処理
+  const onMapLoad = useCallback((evt: any) => {
+    const map = evt.target;
+    
+    // プラグイン適用
+    const language = new MapboxLanguage({ 
+      defaultLanguage: 'ja' 
+    });
+    map.addControl(language);
+
+    // 強制書き換え
+    const style = map.getStyle();
+    if (style && style.layers) {
+      style.layers.forEach((layer: any) => {
+        if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+          try {
+            map.setLayoutProperty(layer.id, 'text-field', [
+              'coalesce',
+              ['get', 'name_ja'],
+              ['get', 'name']
+            ]);
+          } catch (e) {
+            // ignore
+          }
+        }
+      });
+    }
+
+    // ★重要: 処理が終わったら「準備完了」とする（少しだけ待つとより滑らかです）
+    setTimeout(() => {
+      setIsReady(true);
+    }, 200); 
+  }, []);
+
+  useEffect(() => {
+    if (targetLocation && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [targetLocation.lng, targetLocation.lat],
+        zoom: targetLocation.zoom || 16,
+        speed: 1.5,
+        curve: 1,
+        essential: true
+      });
+    }
+  }, [targetLocation]);
+
+  useEffect(() => {
+    const fetchToilets = async () => {
+      try {
+        const url = `${API_BASE_URL}/toilets/nearby?lat=${viewState.latitude}&lng=${viewState.longitude}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          const formatted = data.map((t: any) => ({
+             id: t.id,
+             name: t.stationName || t.name || 'トイレ',
+             lat: t.lat || t.latitude,
+             lng: t.lng || t.longitude,
+             details: t
+          }));
+          setToilets(formatted);
+        }
+      } catch (err) {
+        console.error("Failed to fetch toilets", err);
+      }
+    };
+
+    const timer = setTimeout(fetchToilets, 500);
+    return () => clearTimeout(timer);
+  }, [viewState.latitude, viewState.longitude]);
+
+  const points = useMemo(() => toilets.map(toilet => ({
+    type: 'Feature' as const,
+    properties: { cluster: false, toiletId: toilet.id, ...toilet },
+    geometry: {
+      type: 'Point' as const,
+      coordinates: [toilet.lng, toilet.lat]
+    }
+  })), [toilets]);
+
+  const bounds = mapRef.current
+    ? mapRef.current.getMap().getBounds().toArray().flat() as [number, number, number, number]
+    : undefined;
+
+  const { clusters, supercluster } = useSupercluster({
+    points,
+    bounds,
+    zoom: viewState.zoom,
+    options: { radius: 75, maxZoom: 20 }
   });
 
-  // APIからデータ取得 & 最寄り計算
-  const fetchToilets = async (lat: number, lng: number) => {
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/toilets/nearby?lat=${lat}&lng=${lng}`);
-      if (!res.ok) throw new Error('API Error');
-      const data: Toilet[] = await res.json();
-      
-      // 現在地との距離を計算してデータに追加
-      const dataWithDistance = data.map(t => ({
-        ...t,
-        distance: getDistance(lat, lng, t.latitude, t.longitude)
-      }));
+  const onMove = useCallback((evt: any) => setViewState(evt.viewState), []);
 
-      // 距離順にソート
-      dataWithDistance.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-
-      setToilets(dataWithDistance);
-
-      // 一番近いトイレを親コンポーネントに通知
-      if (onUpdateNearest && dataWithDistance.length > 0) {
-        onUpdateNearest(dataWithDistance[0]);
-      } else if (onUpdateNearest) {
-        onUpdateNearest(null);
-      }
-
-    } catch (error) {
-      console.error("トイレデータの取得に失敗:", error);
-    }
-  };
-
-  const onLoad = useCallback(function callback(map: google.maps.Map) {
-    setMap(map);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const newCenter = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setCenter(newCenter);
-          setCurrentPos(newCenter);
-          map.panTo(newCenter);
-          fetchToilets(newCenter.lat, newCenter.lng);
-        },
-        () => fetchToilets(defaultCenter.lat, defaultCenter.lng)
-      );
-    } else {
-      fetchToilets(defaultCenter.lat, defaultCenter.lng);
-    }
-  }, []);
-
-  const onUnmount = useCallback(function callback(map: google.maps.Map) {
-    setMap(null);
-  }, []);
-
-  const onIdle = () => {
-    if (map) {
-      const newCenter = map.getCenter();
-      if (newCenter) {
-        const lat = newCenter.lat();
-        const lng = newCenter.lng();
-        // 現在地から大きく離れていないか確認（任意）
-        // ここではドラッグするたびに再検索＆最寄り更新を行う
-        fetchToilets(lat, lng);
-      }
-    }
-  };
-
-  if (!isLoaded) return <div className="w-full h-full flex items-center justify-center bg-gray-100">地図読み込み中...</div>;
+  if (!MAPBOX_TOKEN) {
+    return <div className="p-4 text-red-500">Mapbox Token Missing</div>;
+  }
 
   return (
-    <GoogleMap
-      mapContainerStyle={containerStyle}
-      center={center}
-      zoom={16}
-      onLoad={onLoad}
-      onUnmount={onUnmount}
-      onIdle={onIdle}
-      options={{
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        zoomControl: false,
-      }}
-    >
-      {/* 現在地マーカー (青い丸) */}
-      {currentPos && (
-        <MarkerF
-          position={currentPos}
-          icon={{
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 7,
-            fillColor: "#4285F4",
-            fillOpacity: 1,
-            strokeColor: "white",
-            strokeWeight: 2,
-          }}
-        />
-      )}
-
-      {filteredToilets.map((toilet) => (
-        <MarkerF
-          key={toilet.id}
-          position={{ lat: toilet.latitude, lng: toilet.longitude }}
-          onClick={() => setSelectedToilet(toilet)}
-          icon={{
-            url: toilet.is_station_toilet
-              ? "http://maps.google.com/mapfiles/ms/icons/red-dot.png" 
-              : "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-          }}
-        />
-      ))}
-
-      {selectedToilet && (
-        <InfoWindowF
-          position={{ lat: selectedToilet.latitude, lng: selectedToilet.longitude }}
-          onCloseClick={() => setSelectedToilet(null)}
-        >
-          <div style={{ color: 'black', minWidth: '180px' }}>
-            <h3 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>{selectedToilet.name}</h3>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-              {selectedToilet.is_station_toilet ? '🚉 駅トイレ' : '🚻 公衆トイレ'}
-            </div>
-            {selectedToilet.distance && (
-              <div style={{ fontSize: '12px', color: '#ef4444', fontWeight: 'bold', marginBottom: '4px' }}>
-                ここから約 {Math.round(selectedToilet.distance)}m
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '2px' }}>
-              {selectedToilet.is_wheelchair_accessible && <span>♿</span>}
-              {selectedToilet.has_diaper_changing_station && <span>👶</span>}
-              {selectedToilet.is_ostomate_accessible && <span>✚</span>}
-            </div>
+    <div className="w-full h-full relative bg-gray-100">
+      
+      {/* ★追加: ロード中のスピナー（地図が出るまで表示） */}
+      {!isReady && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-50">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <p className="text-xs text-gray-500 font-bold">MAP LOADING...</p>
           </div>
-        </InfoWindowF>
+        </div>
       )}
-    </GoogleMap>
+
+      {/* 地図本体: 準備ができるまで opacity-0 で隠しておく */}
+      <div 
+        className={`w-full h-full transition-opacity duration-700 ease-in-out ${isReady ? 'opacity-100' : 'opacity-0'}`}
+      >
+        <Map
+          {...viewState}
+          ref={mapRef}
+          onMove={onMove}
+          onLoad={onMapLoad}
+          mapStyle="mapbox://styles/mapbox/streets-v11"
+          mapboxAccessToken={MAPBOX_TOKEN}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <NavigationControl position="top-right" />
+          <GeolocateControl position="top-right" />
+
+          <Source type="geojson" data={{ type: 'FeatureCollection', features: clusters }}>
+            <Layer {...clusterLayer} />
+            <Layer {...clusterCountLayer} />
+          </Source>
+
+          {clusters.map(cluster => {
+            const [longitude, latitude] = cluster.geometry.coordinates;
+            const { cluster: isCluster, point_count: pointCount } = cluster.properties;
+
+            if (isCluster) {
+              return (
+                <Marker key={`cluster-${cluster.id}`} longitude={longitude} latitude={latitude}>
+                  <div
+                    className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-xs font-bold shadow-lg cursor-pointer hover:bg-blue-600 transition-colors"
+                    onClick={() => {
+                      const expansionZoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 20);
+                      mapRef.current?.flyTo({ center: [longitude, latitude], zoom: expansionZoom, speed: 1.2 });
+                    }}
+                  >
+                    {pointCount}
+                  </div>
+                </Marker>
+              );
+            }
+
+            return (
+              <Marker
+                key={`toilet-${cluster.properties.toiletId}`}
+                longitude={longitude}
+                latitude={latitude}
+                anchor="bottom"
+                onClick={(e) => {
+                  e.originalEvent.stopPropagation();
+                  setSelectedToilet(cluster.properties);
+                }}
+              >
+                <MapPin className="text-blue-600 w-8 h-8 drop-shadow-md cursor-pointer hover:scale-110 transition-transform" />
+              </Marker>
+            );
+          })}
+
+          {targetLocation && (
+            <Marker
+              longitude={targetLocation.lng}
+              latitude={targetLocation.lat}
+              anchor="bottom"
+            >
+              <div className="flex flex-col items-center animate-bounce-slow">
+                <div className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md mb-1 whitespace-nowrap flex items-center gap-1">
+                  <Navigation className="w-3 h-3" /> GOAL
+                </div>
+                <MapPin className="w-12 h-12 text-red-600 fill-white drop-shadow-xl stroke-[3px]" />
+              </div>
+            </Marker>
+          )}
+
+          {selectedToilet && (
+            <Popup
+              longitude={selectedToilet.lng}
+              latitude={selectedToilet.lat}
+              anchor="top"
+              onClose={() => setSelectedToilet(null)}
+              closeOnClick={false}
+            >
+              <div className="p-2 min-w-[150px]">
+                <h3 className="font-bold text-gray-800 mb-1">{selectedToilet.name}</h3>
+                <p className="text-xs text-gray-500">
+                  {selectedToilet.details?.stationName ? '駅トイレ' : '公衆トイレ'}
+                </p>
+              </div>
+            </Popup>
+          )}
+        </Map>
+      </div>
+    </div>
   );
 }
