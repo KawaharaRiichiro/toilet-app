@@ -3,39 +3,21 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Train, ArrowRight, MapPin, CheckCircle, Info, User, Navigation, LogIn, Crown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+// -----------------------------------------------------------------------------
+// 本番用コード (Vercelデプロイ用)
+// -----------------------------------------------------------------------------
+import { createClient } from '@supabase/supabase-js';
 
-// --- Supabase Client Setup via CDN ---
-const mockSupabase = {
-  auth: {
-    getSession: async () => ({ data: { session: null } }),
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    signUp: async ({ email, password }: any) => {
-        return { data: { user: { id: 'mock-user-id', email } }, error: null };
-    },
-    signInWithPassword: async ({ email, password }: any) => {
-        return { data: { user: { id: 'mock-user-id', email } }, error: null };
-    }
-  },
-  from: (table: string) => ({
-    select: (columns: string) => ({
-      eq: (col: string, val: any) => ({
-        single: async () => ({ data: { is_premium: false }, error: null }),
-        execute: async () => ({ data: [], error: null })
-      }),
-      execute: async () => ({ data: [], error: null })
-    }),
-    insert: (data: any) => ({
-      execute: async () => ({ data: null, error: null })
-    }),
-    update: (data: any) => ({
-      eq: (col: string, val: any) => ({
-        execute: async () => ({ data: null, error: null })
-      })
-    })
-  })
-};
+// 環境変数の取得
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabase = mockSupabase as any; 
+// ★修正: URLとKeyが存在する場合のみクライアントを作成
+// 環境変数がロードされていない場合やビルド時でもクラッシュしないようにnullを許容します
+const supabase = (supabaseUrl && supabaseKey) 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null;
+
 
 // --- TrainRadar Component (Inline) ---
 const TrainRadar = ({ userCar, targetCar, maxCars = 10 }: { userCar: number, targetCar: number, maxCars?: number }) => {
@@ -106,46 +88,16 @@ type PredictionResult = {
   crowd_level: number;
   realtime_crowd_level?: number;
   notes?: string;
-  toilet_name?: string; // 追加
+  toilet_name?: string;
   platform_name?: string;
   message: string;
-  // Google Maps関連のフィールドを削除
-  // latitude?: number; 
-  // longitude?: number;
-  // location_type?: 'exact' | 'station';
+  latitude?: number; 
+  longitude?: number;
+  location_type?: 'exact' | 'station';
   toilet_id?: string;
 };
 
-// --- Mock Data for Preview ---
-const MOCK_LINES: Line[] = [
-  { id: '1', name: 'JR山手線', color: '#80C241', direction_1_name: '外回り', direction_minus_1_name: '内回り', max_cars: 11 },
-  { id: '2', name: '銀座線', color: '#F39700', direction_1_name: '渋谷方面', direction_minus_1_name: '浅草方面', max_cars: 6 },
-  { id: '3', name: '丸ノ内線', color: '#E60012', direction_1_name: '荻窪方面', direction_minus_1_name: '池袋方面', max_cars: 6 },
-];
-
-const MOCK_STATIONS: Station[] = [
-  { id: 's1', name: '新宿', order: 1, dir_1_label: '池袋方面', dir_m1_label: '渋谷方面' },
-  { id: 's2', name: '新大久保', order: 2, dir_1_label: '池袋方面', dir_m1_label: '新宿方面' },
-  { id: 's3', name: '高田馬場', order: 3, dir_1_label: '池袋方面', dir_m1_label: '新宿方面' },
-];
-
-const MOCK_PREDICTION: PredictionResult = {
-  station_id: 's1',
-  station_name: '新宿',
-  stop_order: 0,
-  walking_cars: 0.5,
-  target_car: 4,
-  facility_type: '多機能トイレあり',
-  crowd_level: 2,
-  realtime_crowd_level: 1.2,
-  notes: '南口改札を出て右手の階段を降りた先にあります。',
-  toilet_name: '南口改札内トイレ',
-  platform_name: '14番線',
-  message: '降りてすぐ目の前！',
-  toilet_id: 't1'
-};
-
-// Environment variable handling for client-side
+// クライアントサイドでの環境変数参照
 const API_BASE_URL = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) || 'http://localhost:8000';
 
 export default function Home() {
@@ -168,10 +120,16 @@ export default function Home() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isPremium, setIsPremium] = useState(false); // 簡易的なプレミアムフラグ
+  const [isPremium, setIsPremium] = useState(false);
 
+  // 1. Auth Initialization
   useEffect(() => {
-    // Check active session
+    // ★修正: supabaseクライアントが存在しない場合は処理をスキップ
+    if (!supabase) {
+      console.warn("Supabase client is not initialized. Check your environment variables.");
+      return;
+    }
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
@@ -182,23 +140,20 @@ export default function Home() {
     };
     checkSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 
     return () => authListener.subscription.unsubscribe();
   }, []);
 
-  // --- Fetch Lines (Mocked for Preview) ---
+  // 2. Fetch Lines (with Geolocation)
   useEffect(() => {
     const fetchLines = async () => {
       setLoading(true);
       try {
-        // Mock API call simulation
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setLines(MOCK_LINES);
-        /* // Real implementation
         let url = `${API_BASE_URL}/lines`;
+        
         if (typeof navigator !== 'undefined' && navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             async (position) => {
@@ -206,48 +161,76 @@ export default function Home() {
               url += `?lat=${latitude}&lng=${longitude}`;
               await getLinesData(url);
             },
-            async () => await getLinesData(url)
+            async (error) => {
+              console.warn("Geolocation failed or denied:", error);
+              await getLinesData(url);
+            }
           );
         } else {
           await getLinesData(url);
         }
-        */
       } catch (e) {
-        setErrorMsg("初期化エラー (Mock)");
-        setLoading(false);
-      } finally {
+        console.error(e);
+        setErrorMsg("路線の取得に失敗しました");
         setLoading(false);
       }
     };
-    /* const getLinesData = async (url: string) => {
+
+    const getLinesData = async (url: string) => {
       try {
-        const res = await fetch(url);
-        if (res.ok) {
+        const res = await fetch(url).catch(err => {
+            console.warn("API fetch failed:", err);
+            return null;
+        });
+        
+        if (res && res.ok) {
             const data = await res.json();
             setLines(data);
+        } else {
+            console.error("Failed to fetch lines");
+            setErrorMsg("データの取得に失敗しました");
         }
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+          console.error(e);
+          setErrorMsg("API接続エラー");
+      }
       setLoading(false);
     };
-    */
+
     fetchLines();
   }, []);
 
   const handleAuth = async (isSignUp: boolean) => {
+    // ★修正: クライアントチェックを追加
+    if (!supabase) {
+      alert("認証機能は現在利用できません (環境設定を確認してください)");
+      return;
+    }
+    
     try {
-      const fakeUser = { id: 'user-123', email: email };
-      setUser(fakeUser);
+      let result;
+      if (isSignUp) {
+        result = await supabase.auth.signUp({ email, password });
+      } else {
+        result = await supabase.auth.signInWithPassword({ email, password });
+      }
+      if (result.error) throw result.error;
       setAuthModalOpen(false);
-      alert(isSignUp ? "登録しました (デモ)" : "ログインしました (デモ)");
+      
+      if (isSignUp && result.data.user) {
+        await supabase.from('profiles').insert({ id: result.data.user.id, is_premium: false });
+      }
+      alert(isSignUp ? "登録しました" : "ログインしました");
     } catch (e: any) {
       alert(e.message);
     }
   };
 
   const handleUpgrade = async () => {
-    if (!user) return;
+    if (!user || !supabase) return;
     const confirm = window.confirm("月額300円でプレミアム会員になりますか？");
     if (confirm) {
+      await supabase.from('profiles').update({ is_premium: true }).eq('id', user.id);
       setIsPremium(true);
       alert("プレミアム会員になりました！");
     }
@@ -255,7 +238,6 @@ export default function Home() {
 
   const handleReport = async (toiletId: string, level: number) => {
     try {
-      /*
       const res = await fetch(`${API_BASE_URL}/report_congestion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -266,9 +248,7 @@ export default function Home() {
         })
       });
       if (!res.ok) throw new Error("Failed");
-      */
-      await new Promise(resolve => setTimeout(resolve, 300)); // Mock delay
-      alert("投稿ありがとうございます！(デモ送信)");
+      alert("投稿ありがとうございます！");
     } catch (e) {
       console.error(e);
       alert("送信に失敗しました");
@@ -281,23 +261,57 @@ export default function Home() {
     setErrorMsg(null);
 
     try {
-      // Mock Stations
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const stationData: Station[] = MOCK_STATIONS;
-      setStations(stationData);
-      setCurrentStation(stationData[0]);
-      setLoading(false);
-      setStep('direction');
-
-      /* Real implementation
       const res = await fetch(`${API_BASE_URL}/stations?line_id=${line.id}`);
       if (!res.ok) throw new Error('API Error');
       const stationData: Station[] = await res.json();
-      // ... (geolocation logic) ...
-      */
+
+      if (!Array.isArray(stationData)) {
+          throw new Error("Invalid Data");
+      }
+
+      setStations(stationData);
+
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            let nearest: Station | null = null;
+            let minDist = Infinity;
+
+            stationData.forEach(st => {
+              const sLat = st.lat || 0;
+              const sLng = st.lng || 0;
+              if (sLat !== 0 && sLng !== 0) {
+                const d = Math.sqrt(Math.pow(sLat - latitude, 2) + Math.pow(sLng - longitude, 2));
+                if (d < minDist) {
+                  minDist = d;
+                  nearest = st;
+                }
+              }
+            });
+
+            if (nearest) {
+              setCurrentStation(nearest);
+            } else {
+              setCurrentStation(stationData[0]);
+            }
+            setLoading(false);
+            setStep('direction');
+          },
+          () => {
+            setCurrentStation(stationData[0]);
+            setLoading(false);
+            setStep('direction');
+          }
+        );
+      } else {
+        setCurrentStation(stationData[0]);
+        setLoading(false);
+        setStep('direction');
+      }
     } catch (e) {
       console.error(e);
-      setErrorMsg("駅データの取得に失敗しました (Mock)");
+      setErrorMsg("駅データの取得に失敗しました");
       setLoading(false);
     }
   };
@@ -311,15 +325,6 @@ export default function Home() {
     setSelectedCar(car);
     setLoading(true);
     try {
-      // Mock Prediction
-      await new Promise(resolve => setTimeout(resolve, 800));
-      const results: PredictionResult[] = [MOCK_PREDICTION];
-      
-      setPredictions(results);
-      setStep('result');
-      setLoading(false);
-
-      /* Real implementation
       const url = `${API_BASE_URL}/predict?line_id=${selectedLine?.id}&current_station_id=${currentStation?.id}&user_car=${car}&direction=${direction}`;
       const res = await fetch(url);
       const results = await res.json();
@@ -331,10 +336,9 @@ export default function Home() {
       setPredictions(results);
       setStep('result');
       setLoading(false);
-      */
     } catch (e) {
       console.error("Prediction Error:", e);
-      setErrorMsg("予測データの取得に失敗しました (Mock)");
+      setErrorMsg("予測データの取得に失敗しました。サーバーエラーの可能性があります。");
       setLoading(false);
     }
   };
@@ -536,8 +540,6 @@ export default function Home() {
                           <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{pred.notes}</p>
                       </div>
                     )}
-
-                    {/* Google Map への誘導（削除済み） */}
 
                     {/* 投稿ボタン (トイレIDがある場合のみ) */}
                     {pred.toilet_id && (
