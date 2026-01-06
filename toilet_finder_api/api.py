@@ -43,7 +43,7 @@ class PredictionResult(BaseModel):
     crowd_level: int = Field(default=3, description="混雑度(デフォルト3)")
     realtime_crowd_level: Optional[float] = Field(default=None, description="リアルタイム混雑度(ユーザー投稿平均)")
     notes: Optional[str] = Field(default=None)
-    toilet_name: Optional[str] = Field(default=None, description="トイレの具体的な名称") # 追加
+    toilet_name: Optional[str] = Field(default=None, description="トイレの具体的な名称")
     platform_name: str = Field(default="ホーム", description="発着番線")
     message: str
     latitude: Optional[float] = Field(default=None, description="目的地緯度")
@@ -62,7 +62,7 @@ class LineInfo(BaseModel):
 class CongestionReport(BaseModel):
     toilet_id: str
     congestion_level: int = Field(..., ge=1, le=3, description="1:空き, 2:普通, 3:混雑")
-    user_id: Optional[str] = None # ログインしていればIDが入る
+    user_id: Optional[str] = None 
 
 # -----------------------------------------------------------------
 # ヘルパー関数
@@ -153,36 +153,55 @@ def read_root():
 @app.get("/lines", response_model=List[LineInfo])
 def get_lines(lat: Optional[float] = None, lng: Optional[float] = None):
     try:
+        # 全路線データを取得（キャッシュとして利用）
         all_lines = supabase.table("lines").select("*").execute().data
-        nearby_line_ids = set()
         
+        target_line_ids = set()
+        
+        # 緯度経度が指定されている場合、最寄り駅を特定する
         if lat is not None and lng is not None:
             try:
-                all_stations = supabase.table("stations").select("*").execute().data
-                nearby_station_ids = []
+                # 全駅の座標を取得
+                all_stations = supabase.table("stations").select("id, lat, lng").execute().data
+                
+                nearest_station_id = None
+                min_dist_sq = float('inf') # 距離の二乗で比較
+                
                 for st in all_stations:
                     s_lat = safe_float(st.get('lat') or st.get('latitude'))
                     s_lng = safe_float(st.get('lng') or st.get('lon') or st.get('longitude'))
                     
                     if s_lat != 0 and s_lng != 0:
-                        # 0.03度 約3km以内
-                        dist = math.sqrt((s_lat - lat)**2 + (s_lng - lng)**2)
-                        if dist < 0.03: 
-                            nearby_station_ids.append(st['id'])
+                        # 三平方の定理で距離の二乗を計算（ルート計算を省いて高速化）
+                        dist_sq = (s_lat - lat)**2 + (s_lng - lng)**2
+                        if dist_sq < min_dist_sq:
+                            min_dist_sq = dist_sq
+                            nearest_station_id = st['id']
                 
-                if nearby_station_ids:
-                    chunk_size = 20
-                    for i in range(0, len(nearby_station_ids), chunk_size):
-                        chunk = nearby_station_ids[i:i + chunk_size]
-                        ls_res = supabase.table("line_stations").select("line_id").in_("station_id", chunk).execute()
-                        for item in ls_res.data: nearby_line_ids.add(item['line_id'])
+                # 最寄り駅が見つかった場合、その駅を通る路線IDを取得
+                # 0.01 (約11km圏内) くらいを安全弁としておく
+                if nearest_station_id and min_dist_sq < 0.01:
+                    ls_res = supabase.table("line_stations").select("line_id").eq("station_id", nearest_station_id).execute()
+                    for item in ls_res.data:
+                        target_line_ids.add(item['line_id'])
+                else:
+                    # 近くに駅がない場合（海外など）は空リストを返す
+                    return []
+
             except Exception as e:
-                print(f"[Warning] Location filter error: {e}")
+                print(f"[Warning] Nearest station search error: {e}")
+                # エラー時は空リスト（何も表示しない）
+                return []
 
+        # 結果の構築
         result_lines = []
-        target_lines = [l for l in all_lines if l['id'] in nearby_line_ids] if lat is not None and lng is not None and nearby_line_ids else all_lines
-
-        for line in target_lines:
+        
+        for line in all_lines:
+            # 位置情報フィルタが有効で、かつ対象外の路線ならスキップ
+            if lat is not None and lng is not None:
+                if line['id'] not in target_line_ids:
+                    continue
+            
             term_1, term_m1 = get_line_terminals(line['id'])
             max_cars = safe_int(line.get('max_cars'), 10)
             
@@ -194,7 +213,9 @@ def get_lines(lat: Optional[float] = None, lng: Optional[float] = None):
                 "direction_minus_1_name": term_m1,
                 "max_cars": max_cars
             })
+        
         return result_lines
+
     except Exception as e:
         print(f"[Error] /lines failed: {e}")
         return []
@@ -233,7 +254,6 @@ def get_stations(line_id: str):
 @app.get("/predict", response_model=List[PredictionResult])
 def predict_best_station(line_id: str, current_station_id: str, user_car: int, direction: int = Query(1)):
     try:
-        # 1. 現在の駅情報を取得
         try:
             current_link_res = supabase.table("line_stations").select("*").eq("line_id", line_id).eq("station_id", current_station_id).single().execute()
         except Exception:
@@ -244,7 +264,6 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
         
         current_link = current_link_res.data
         
-        # 2. ターゲットリスト作成
         target_ids = []
         target_ids.append({'id': current_station_id, 'stop_order': 0})
         
@@ -261,15 +280,12 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
 
         results = []
         
-        # 3. 戦略評価
         for target in target_ids:
             try:
-                # 駅名と駅の座標を取得
                 st_res = supabase.table("stations").select("id, name, lat, lng").eq("id", target['id']).single().execute()
                 if not st_res.data: continue
                 st_data = st_res.data
                 
-                # デフォルト: 駅の位置
                 dest_lat = safe_float(st_data.get('lat'))
                 dest_lng = safe_float(st_data.get('lng'))
                 location_type = "station"
@@ -314,21 +330,18 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
                     platform = str(raw_platform) if raw_platform else "ホーム"
                     toilet_id = best_cand.get('target_toilet_id')
                     
-                    # トイレ固有の情報を取得
                     if toilet_id:
                         try:
-                            # 座標・名称
                             t_res = supabase.table("toilets").select("lat, lng, name").eq("id", toilet_id).single().execute()
                             if t_res.data:
                                 t_lat = safe_float(t_res.data.get('lat'))
                                 t_lng = safe_float(t_res.data.get('lng'))
-                                toilet_name = t_res.data.get('name') # トイレ名取得
+                                toilet_name = t_res.data.get('name')
                                 if t_lat != 0 and t_lng != 0:
                                     dest_lat = t_lat
                                     dest_lng = t_lng
                                     location_type = "exact"
                             
-                            # リアルタイム混雑度
                             reports = supabase.table("congestion_reports") \
                                 .select("congestion_level") \
                                 .eq("toilet_id", toilet_id) \
@@ -341,7 +354,6 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
                                 realtime_crowd = sum(levels) / len(levels)
                                 
                         except Exception as e:
-                            print(f"Sub query error: {e}")
                             pass
 
                 if wc < 0.5: msg = "降りてすぐ目の前！"
@@ -361,7 +373,7 @@ def predict_best_station(line_id: str, current_station_id: str, user_car: int, d
                     "crowd_level": crd,
                     "realtime_crowd_level": round(realtime_crowd, 1) if realtime_crowd else None,
                     "notes": notes,
-                    "toilet_name": toilet_name, # 追加
+                    "toilet_name": toilet_name,
                     "platform_name": platform,
                     "message": msg,
                     "latitude": dest_lat,
